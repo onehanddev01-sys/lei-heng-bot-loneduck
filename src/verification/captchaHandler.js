@@ -1,10 +1,10 @@
 // path: src/verification/captchaHandler.js
 //
 // Captcha UI and validation: image-based captcha generation, modal, validation.
-// Uses captcha-canvas for image generation. No session state; verificationService owns state.
+// Uses svg-captcha for image generation and sharp for SVG to PNG conversion. No session state; verificationService owns state.
 //
 // SCALING: Captcha generation is CPU-bound. For high load, consider a dedicated
-// worker pool or external captcha service (e.g. hCaptcha) to offload from the main process.
+// worker pool or external captcha service (e.g. hCaptcha) to offload from main process.
 
 const {
   EmbedBuilder,
@@ -16,7 +16,8 @@ const {
   TextInputStyle,
   AttachmentBuilder,
 } = require('discord.js');
-const { createCaptcha } = require('captcha-canvas');
+const svgCaptcha = require('svg-captcha');
+const sharp = require('sharp');
 const { config } = require('../config');
 
 /** Length of captcha code: 5–6 alphanumeric characters. */
@@ -60,18 +61,30 @@ function trackCaptchaGeneration() {
 
 /**
  * Generate an image-based captcha (non-blocking).
- * Uses captcha-canvas async API to avoid blocking the event loop.
+ * Uses svg-captcha and sharp to avoid native dependencies.
  * @param {boolean} [harder] - If true, use longer captcha (e.g. during lockdown).
  * @returns {Promise<{ buffer: Buffer, text: string }>}
  */
 async function generateImageCaptcha(harder = false) {
   trackCaptchaGeneration();
   const length = harder ? 8 : IMAGE_CAPTCHA_LENGTH;
-  const { image, text } = createCaptcha(IMAGE_WIDTH, IMAGE_HEIGHT, {
-    captcha: { characters: length },
+  
+  // Generate SVG captcha
+  const captcha = svgCaptcha.create({
+    length: length,
+    size: 6,
+    noise: 2,
+    color: true,
+    background: '#ffffff'
   });
-  const buffer = await image;
-  return { buffer, text };
+  
+  // Convert SVG to PNG buffer using sharp
+  const buffer = await sharp(Buffer.from(captcha.data))
+    .resize(IMAGE_WIDTH, IMAGE_HEIGHT)
+    .png()
+    .toBuffer();
+  
+  return { buffer, text: captcha.text };
 }
 
 /**
