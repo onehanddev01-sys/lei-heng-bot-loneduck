@@ -24,7 +24,8 @@ const config = {
 
 function validateConfig() {
   if (!config.DISCORD_BOT_TOKEN) {
-    console.error('ERROR: Missing DISCORD_BOT_TOKEN in .env. Bot will exit.');
+    console.error('ERROR: Missing DISCORD_BOT_TOKEN in environment variables. Bot will exit.');
+    console.log('Please set DISCORD_BOT_TOKEN in Railway Dashboard → Project → Variables');
     process.exit(1);
   }
 }
