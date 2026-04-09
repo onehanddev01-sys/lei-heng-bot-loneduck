@@ -4,7 +4,7 @@
   "description": "Discord security bot for the LoneDuck server with verification, raid detection, and Telegram alerts.",
   "main": "index.js",
   "scripts": {
-    "start": "node --omit=dev index.js",
+    "start": "node index.js",
     "dev": "node index.js"
   },
   "engines": {
