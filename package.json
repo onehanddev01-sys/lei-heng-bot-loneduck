@@ -4,7 +4,7 @@
   "description": "Discord security bot for the LoneDuck server with verification, raid detection, and Telegram alerts.",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node --omit=dev index.js",
     "dev": "node index.js"
   },
   "engines": {
@@ -22,7 +22,10 @@
   "dependencies": {
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.5",
-    "svg-captcha": "^1.4.0",
-    "sharp": "^0.33.5"
+    "sharp": "^0.33.5",
+    "svg-captcha": "^1.4.0"
+  },
+  "devDependencies": {
+    "@flydotio/dockerfile": "^0.7.10"
   }
 }
