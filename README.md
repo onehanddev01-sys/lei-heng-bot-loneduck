@@ -77,7 +77,7 @@ DISCORD_BOT_TOKEN=your_real_discord_token
 TELEGRAM_BOT_TOKEN=your_real_telegram_token
 TELEGRAM_CHAT_ID=your_telegram_chat_id
 
-SERVER_NAME=LoneDuck
+SERVER_NAME=your_server_name
 
 GUILD_ID=1479823674684084235
 VERIFY_ROLE_ID=1479834121323680017
@@ -112,7 +112,7 @@ npm start
 
 ### สิ่งที่ต้องตั้งค่าใน Discord
 
-- ให้บอทอยู่ในเซิร์ฟเวอร์ `LoneDuck`
+- ให้บอทอยู่ในเซิร์ฟเวอร์ `your_server_name`
 - ให้บอทมีสิทธิ์:
   - Manage Roles (เพื่อแจก role verify)
   - Kick Members
@@ -160,7 +160,7 @@ DISCORD_BOT_TOKEN=your_real_discord_token
 TELEGRAM_BOT_TOKEN=your_real_telegram_token
 TELEGRAM_CHAT_ID=your_telegram_chat_id
 
-SERVER_NAME=LoneDuck
+SERVER_NAME=your_server_name
 
 GUILD_ID=1479823674684084235
 VERIFY_ROLE_ID=1488003949129764915
@@ -168,6 +168,8 @@ WELCOME_CHANNEL_ID=1479834322491146331
 LOG_CHANNEL_ID=1479834690381680822
 QUARANTINE_ROLE_ID=1488005580097327215
 ```
+
+> **สำคัญมาก**: แก้ไข `your_server_name` เป็นชื่อเซิร์ฟเวอร์ของคุณเอง
 
 **4.** รันบอท
 
@@ -177,7 +179,7 @@ npm start
 
 **5.** ตั้งค่าบอทบน Discord
 
-- ให้บอทอยู่ในเซิร์ฟเวอร์ `LoneDuck`
+- ให้บอทอยู่ในเซิร์ฟเวอร์ `your_server_name`
 - ให้บอทมีสิทธิ์:
   - Manage Roles (เพื่อแจก role verify)
   - Kick Members
@@ -212,7 +214,7 @@ QUARANTINE_ROLE_ID=1488005580097327215
 
 **5.** ตั้งค่าบอทบน Discord
 
-- ให้บอทอยู่ในเซิร์ฟเวอร์ `LoneDuck`
+- ให้บอทอยู่ในเซิร์ฟเวอร์ `your_server_name`
 - ให้บอทมีสิทธิ์:
   - Manage Roles (เพื่อแจก role verify)
   - Kick Members
