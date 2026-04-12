@@ -97,7 +97,7 @@ QUARANTINE_ROLE_ID=1488005580097327215
 ```
 
 //  คำเตือนเรื่องความปลอดภัยของ token
-> **สำคัญมาก**: อย่าใส่ token จริงลงใน `.env.example` หรือไฟล์ที่ถูก commit ขึ้น Git / GitHub หรือแชร์ให้คนอื่นเห็น
+ให้ใช้ gitignore ซ่อนไฟล์ `.env` หรือไฟล์ที่มี token จริง
 
 //  โครงสร้างโปรเจกต์
 3. **โครงสร้างโปรเจกต์**
@@ -303,7 +303,8 @@ A: Git ใช้สำหรับเก็บประวัติการเ�
 
 - **Issues**: [GitHub Issues](https://github.com/onehanddev01-sys/lei-heng-bot-loneduck/issues)
 - **Discord**: ติดต่อผ่าน Discord
-- **Telegram**: ติดต่อผ่าน Telegram
+
+https://discord.com/invite/zk9Sx4bwde
 
 ---
 
