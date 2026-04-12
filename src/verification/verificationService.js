@@ -602,7 +602,6 @@ module.exports = {
   markSuspiciousUser,
   isSuspiciousUser,
   getAccountAgeDays,
-  forceSessionCleanup,
   getVerificationSessionCount,
   getSuspiciousAccountCount,
 };
