@@ -46,14 +46,25 @@ function runHealthCheck() {
       `Health: heap ${(mem.heapUsed / 1024 / 1024).toFixed(1)}MB, ` +
       `uptime ${uptimeSec}s, loop delay ~${loopDelay}ms`;
 
+    // Add performance metrics
+    const cpuUsage = process.cpuUsage();
+    const rssMB = mem.rss / 1024 / 1024;
+    
+    const perfMsg = `CPU: ${cpuUsage.user}μs/${cpuUsage.system}μs, RSS: ${rssMB.toFixed(1)}MB`;
+
     if (heapUsedRatio >= HEAP_CRITICAL_THRESHOLD) {
       logError(
-        `[CRITICAL] Heap usage ${(heapUsedRatio * 100).toFixed(1)}% - ${msg}`,
+        `[CRITICAL] Heap usage ${(heapUsedRatio * 100).toFixed(1)}% - ${msg} - ${perfMsg}`,
         new Error('HealthMonitor'),
       );
     } else if (heapUsedRatio >= HEAP_WARNING_THRESHOLD) {
       logError(
-        `[WARNING] Heap usage ${(heapUsedRatio * 100).toFixed(1)}% - ${msg}`,
+        `[WARNING] Heap usage ${(heapUsedRatio * 100).toFixed(1)}% - ${msg} - ${perfMsg}`,
+        new Error('HealthMonitor'),
+      );
+    } else if (loopDelay > 100) {
+      logError(
+        `[WARNING] Event loop delay ${loopDelay}ms - ${msg} - ${perfMsg}`,
         new Error('HealthMonitor'),
       );
     }

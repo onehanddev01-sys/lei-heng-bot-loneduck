@@ -40,7 +40,7 @@ function buildLogEmbed(type, description, color) {
 }
 
 async function logEvent(guild, type, description) {
-  // Always write to file first - this should never fail the bot
+  // Always write to file first - this should never fail bot
   try {
     writeToFile(type, description);
   } catch (fileErr) {
@@ -56,12 +56,15 @@ async function logEvent(guild, type, description) {
     let channel;
     if (typeof guild.channels?.fetch === 'function') {
       // Real guild object
-      channel = await guild.channels.fetch(config.LOG_CHANNEL_ID);
+      channel = await guild.channels.fetch(config.LOG_CHANNEL_ID).catch(() => null);
     } else {
       // Fake guild object - we can't fetch channels without a real guild object
-      // Just log to file and return
-      console.warn(`Cannot log to Discord channel: guild object missing channels.fetch method`);
-      return;
+      // Try to get channel from cache
+      channel = guild.client.channels.cache.get(config.LOG_CHANNEL_ID);
+      if (!channel) {
+        console.warn(`Cannot log to Discord channel: guild object missing channels.fetch method and channel not in cache`);
+        return;
+      }
     }
     
     if (!channel || !channel.isTextBased()) return;

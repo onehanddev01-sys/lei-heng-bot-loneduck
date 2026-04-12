@@ -44,6 +44,7 @@ const GLOBAL_RATE_LIMIT_WINDOW_MS = 60_000;
 const QUEUE_BATCH_SIZE = 5;
 const QUEUE_PROCESS_INTERVAL_MS = 100;
 const CLEANUP_INTERVAL_MS = 60_000;
+const MAX_QUEUE_SIZE = 1000; // Prevent memory explosion
 
 // --- In-memory state ---
 /** userId -> { code, guildId, expiresAt } */
@@ -317,9 +318,9 @@ async function startVerification(interaction) {
   }
 
   // Backpressure: cap queue size to avoid memory explosion during raids
-  if (verifyQueue.length >= 500) {
+  if (verifyQueue.length >= MAX_QUEUE_SIZE) {
     await interaction.reply({
-      content: 'มีผู้ใช้ยืนยันตัวตนจำนวนมาก กรุณาลองใหม่อีกครั้งในสักครู่.',
+      content: 'มีผู้ใช้ยืนยันตัวตนจำนวนมาก กรุณาลองใหม่อีกครั้ง.',
       ephemeral: true,
     });
     return;
