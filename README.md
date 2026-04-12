@@ -2,10 +2,12 @@
 
 > 24/7 Discord Security Bot with Verification, Raid Detection, and Telegram Alerts
 
+//  บอทความปลอดภัย Discord ตลอด 24/7 พร้อมระบบ Verify ตรวจจับ Raid และแจ้งเตือน Telegram
 **LoneDuck Security Bot** คือ Discord Bot สำหรับรักษาความปลอดภัยเซิร์ฟเวอร์ `"LoneDuck"` พร้อมระบบ Verify, ตรวจสอบอายุบัญชี, Raid Detection, Logging และ Telegram Alerts
 
 ### ฟีเจอร์หลัก
 
+//  ระบบ Verify ยืนยันตัวตนผู้ใช้
 - **ระบบ Verify**
   - เมื่อมีผู้ใช้เข้าร่วมเซิร์ฟเวอร์ บอทจะส่ง Verify Panel ในห้อง `WELCOME_CHANNEL_ID`
   - มีปุ่ม **Verify**
@@ -22,6 +24,7 @@
       - บันทึก log
       - ส่งแจ้งเตือนไป Telegram
 
+//  ตรวจสอบอายุบัญชี Discord
 - **ตรวจสอบอายุบัญชี**
   - เมื่อมีผู้ใช้เข้ามา ตรวจสอบวันสร้างบัญชี Discord
   - ถ้าอายุบัญชีต่ำกว่า 7 วัน:
@@ -29,12 +32,14 @@
     - บันทึก log (`Suspicious account`)
     - ส่งแจ้งเตือนไป Telegram
 
+//  ระบบตรวจจับการโจมตี Raid
 - **ระบบตรวจจับ Raid**
   - ถ้ามีผู้ใช้มากกว่า 5 คนเข้าเซิร์ฟเวอร์ภายใน 10 วินาที:
     - ส่ง RAID ALERT
     - บันทึกใน `LOG_CHANNEL_ID`
     - ส่งแจ้งเตือนไป Telegram
 
+//  ระบบบันทึก log ทั้ง Discord และไฟล์
 - **ระบบ Logging**
   - บันทึกเหตุการณ์ลงทั้ง:
     - Discord (ใช้ Embed ส่งเข้า `LOG_CHANNEL_ID`)
@@ -47,6 +52,7 @@
     - Suspicious account
     - Raid detected
 
+//  แจ้งเตือนผ่าน Telegram
 - **Telegram Alerts**
   - ส่งแจ้งเตือนเมื่อ:
     - Raid detected
@@ -56,12 +62,14 @@
 
 ### การติดตั้งและรันบอท
 
+//  ติดตั้ง dependencies ที่จำเป็น
 1. **ติดตั้ง dependencies**
 
 ```bash
 npm install
 ```
 
+//  สร้างไฟล์ environment variables
 2. **สร้างไฟล์ `.env`**
 
 คัดลอกจาก `.env.example`
@@ -70,8 +78,10 @@ npm install
 cp .env.example .env
 ```
 
+//  เพิ่มค่าจริงของคุณ ห้าม commit หรือแชร์ไฟล์นี้
 จากนั้นเติมค่าจริงของคุณลงใน `.env` (ห้าม commit หรือแชร์ไฟล์นี้)
 
+//  ค่า environment variables ที่ต้องตั้ง
 ```env
 DISCORD_BOT_TOKEN=your_real_discord_token
 TELEGRAM_BOT_TOKEN=your_real_telegram_token
@@ -86,8 +96,10 @@ LOG_CHANNEL_ID=1479834690381680822
 QUARANTINE_ROLE_ID=1488005580097327215
 ```
 
+//  คำเตือนเรื่องความปลอดภัยของ token
 > **สำคัญมาก**: อย่าใส่ token จริงลงใน `.env.example` หรือไฟล์ที่ถูก commit ขึ้น Git / GitHub หรือแชร์ให้คนอื่นเห็น
 
+//  โครงสร้างโปรเจกต์
 3. **โครงสร้างโปรเจกต์**
 
 ```text
@@ -105,12 +117,14 @@ src/
     telegram.js      # ฟังก์ชันส่งข้อความแจ้งเตือนเข้า Telegram
 ```
 
+//  รันบอท
 4. **รันบอท**
 
 ```bash
 npm start
 ```
 
+//  ตั้งค่าบอทบน Discord
 ### สิ่งที่ต้องตั้งค่าใน Discord
 
 - ให้บอทอยู่ในเซิร์ฟเวอร์ `LoneDuck`
@@ -120,6 +134,7 @@ npm start
   - View Channels / Send Messages / Read Message History
 - ตั้งค่า role, channel IDs ให้ตรงกับค่าใน `.env`
 
+//  ความปลอดภัยของ Token และ Environment Variables
 ### ความปลอดภัยของ Token / Environment Variables
 
 - **ห้าม** commit ไฟล์ `.env` หรือ token จริงใด ๆ ลงใน git repo
@@ -136,12 +151,15 @@ npm start
 
 ---
 
+//  การติดตั้งและรันบอทบนเครื่อง Local
 ## การติดตั้งและรันบอทบน Local
 
 ### 1: การติดตั้ง
 
+//  ติดตั้งเครื่องมือที่จำเป็น
 **1.** ติดตั้ง Git และ Node.js บนเครื่องของคุณ
 
+//  โคลนโปรเจกต์จาก GitHub
 **2.** โคลนโปรเจกต์นี้ลงบนเครื่องของคุณ
 
 ```bash
@@ -150,12 +168,14 @@ cd lei-heng-bot-loneduck
 npm install
 ```
 
+//  สร้างไฟล์ environment variables
 **3.** สร้างไฟล์ `.env` และเติมค่าจริงของคุณลงไป
 
 ```bash
 cp .env.example .env
 ```
 
+//  ค่า environment variables สำหรับ Local
 ```env
 DISCORD_BOT_TOKEN=your_real_discord_token
 TELEGRAM_BOT_TOKEN=your_real_telegram_token
@@ -170,12 +190,14 @@ LOG_CHANNEL_ID=1479834690381680822
 QUARANTINE_ROLE_ID=1488005580097327215
 ```
 
+//  รันบอท
 **4.** รันบอท
 
 ```bash
 npm start
 ```
 
+//  ตั้งค่าบอทบน Discord
 **5.** ตั้งค่าบอทบน Discord
 
 - ให้บอทอยู่ในเซิร์ฟเวอร์ `LoneDuck`
@@ -187,16 +209,21 @@ npm start
 
 ---
 
+//  การติดตั้งบน Cloud (Railway)
 ## การติดตั้งและรันบอทบน Cloud (Railway)
 
 ### 1: การติดตั้ง
 
+//  สร้างบัญชี Railway และเชื่อมต่อ GitHub
 **1.** สร้างบัญชีบน Railway และเชื่อมต่อกับ GitHub
 
+//  สร้างโปรเจกต์ใหม่จาก GitHub repo
 **2.** สร้างโปรเจกต์ใหม่บน Railway และเลือก "Deploy from GitHub repo"
 
+//  ตั้งค่า Environment Variables บน Railway
 **3.** ตั้งค่า Environment Variables บน Railway
 
+//  ค่า environment variables สำหรับ Railway
 ```env
 DISCORD_BOT_TOKEN=your_real_discord_token
 TELEGRAM_BOT_TOKEN=your_real_telegram_token
@@ -209,8 +236,10 @@ LOG_CHANNEL_ID=1479834690381680822
 QUARANTINE_ROLE_ID=1488005580097327215
 ```
 
+//  Redeploy โปรเจกต์บน Railway
 **4.** Redeploy โปรเจกต์บน Railway
 
+//  ตั้งค่าบอทบน Discord
 **5.** ตั้งค่าบอทบน Discord
 
 - ให้บอทอยู่ในเซิร์ฟเวอร์ `LoneDuck`
@@ -222,17 +251,21 @@ QUARANTINE_ROLE_ID=1488005580097327215
 
 ---
 
+//  การตั้งค่าบอทบน Discord
 ## การตั้งค่าบอทบน Discord
 
 ### 1: การตั้งค่าบอท
 
+//  สร้างบอทใหม่บน Discord Developer Portal
 **1.** สร้างบอทใหม่บน Discord Developer Portal
 
+//  ตั้งค่า Privileged Gateway Intents
 **2.** ตั้งค่า Privileged Gateway Intents
 
   - **SERVER MEMBERS INTENT**
   - **MESSAGE CONTENT INTENT**
 
+//  ตั้งค่า OAuth2 URL Generator
 **3.** ตั้งค่า OAuth2 URL Generator
 
   - **scopes**: `bot`, `applications.commands`
@@ -246,10 +279,12 @@ QUARANTINE_ROLE_ID=1488005580097327215
     - Attach Files
     - Use Slash Commands
 
+//  ตั้งค่าบอทบนเซิร์ฟเวอร์ LoneDuck
 **4.** ตั้งค่าบอทบนเซิร์ฟเวอร์ `LoneDuck`
 
 ---
 
+//  คำถามที่พบบ่อย (FAQ)
 ## คำถามที่พบบ่อย
 
 ### Q: ทำไมต้องใช้ Railway?
@@ -263,6 +298,7 @@ A: Git ใช้สำหรับเก็บประวัติการเ�
 
 ---
 
+//  ข้อมูลติดต่อ
 ## ข้อมูลติดต่อ
 
 - **Issues**: [GitHub Issues](https://github.com/onehanddev01-sys/lei-heng-bot-loneduck/issues)
@@ -271,6 +307,8 @@ A: Git ใช้สำหรับเก็บประวัติการเ�
 
 ---
 
+//  คำเตือนความปลอดภัยของ token
 > **สำคัญมาก**: อย่าใส่ token จริงลงใน `.env.example` หรือไฟล์ที่ถูก commit ขึ้น Git / GitHub หรือแชร์ให้คนอื่นเห็น
 
+//  บทสรุปโปรเจกต์
 **LoneDuck Security Bot** คือ Discord Bot สำหรับรักษาความปลอดภัยเซิร์ฟเวอร์ `"LoneDuck"` พร้อมระบบ Verify, ตรวจสอบอายุบัญชี, Raid Detection, Logging และ Telegram Alerts

@@ -1,73 +1,62 @@
-// path: src/verification/captchaAbuseDetection.js
-//
-// Captcha abuse detection: tracks failed captcha attempts and automatically
-// flags suspicious users for quarantine when they exceed failure thresholds.
 
+//  บริการ logging และ config
 const { logError } = require('../utils/logger');
 const { getGuildConfig } = require('../utils/guildConfig');
 
-/** userId -> { failures: number, firstFailure: timestamp } */
+//  จัดเก็บข้อมูลการล้มเหลวของผู้ใช้
 const userFailureData = new Map();
 
+//  ค่าคงที่สำหรับการตรวจจับการใช้งาน captcha ในทางที่ผิด
 const FAILURE_THRESHOLD = 5;
-const FAILURE_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
-const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const FAILURE_WINDOW_MS = 2 * 60 * 1000;
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
-/**
- * Record a captcha failure for a user
- * @param {string} userId - Discord user ID
- * @param {string} guildId - Discord guild ID
- * @returns {Promise<{shouldQuarantine: boolean, failures: number}>}
- */
+//  บันทึกการล้มเหลวของ captcha
 async function recordCaptchaFailure(userId, guildId) {
-  // Defensive coding: validate inputs
+  //  ตรวจสอบพารามิเตอร์ที่ไม่ถูกต้อง
   if (!userId || typeof userId !== 'string' || !guildId || typeof guildId !== 'string') {
     console.warn('Invalid parameters passed to recordCaptchaFailure');
     return { shouldQuarantine: false, failures: 0 };
   }
   
   const now = Date.now();
+  //  ดึงข้อมูลการล้มเหลวที่มีอยู่หรือสร้างข้อมูลใหม่
   const existing = userFailureData.get(userId) || { failures: 0, firstFailure: now };
   
-  // Reset if window has expired
+  //  รีเซ็ตการนับถ้าหมดเวลาหน้าต่าง
   if (now - existing.firstFailure > FAILURE_WINDOW_MS) {
     existing.failures = 0;
     existing.firstFailure = now;
   }
   
+  //  เพิ่มจำนวนการล้มเหลว
   existing.failures++;
   userFailureData.set(userId, existing);
   
+  //  ตรวจสอบว่าควรกักกันหรือไม่
   const shouldQuarantine = existing.failures >= FAILURE_THRESHOLD;
   
   if (shouldQuarantine) {
     await flagSuspiciousUser(userId, guildId, existing.failures);
-    // Reset after quarantine
     userFailureData.delete(userId);
   }
   
   return { shouldQuarantine, failures: existing.failures };
 }
 
-/**
- * Flag a user as suspicious and apply quarantine role
- * @param {string} userId - Discord user ID
- * @param {string} guildId - Discord guild ID
- * @param {number} failureCount - Number of failures
- */
+//  ทำเครื่องหมายผู้ใช้ว่าน่าสงสัย
 async function flagSuspiciousUser(userId, guildId, failureCount) {
   try {
-    // This will be used by the verification service to apply quarantine
     const { logGenericEvent } = require('../utils/loggingService');
     
-    // Log the abuse detection event
+    //  บันทึกเหตุการณ์การตรวจจับการใช้ captcha ในทางที่ผิด
     await logGenericEvent(
       { id: guildId },
       'Captcha Abuse Detected',
       `User ${userId} failed captcha ${failureCount} times in ${FAILURE_WINDOW_MS / 1000} minutes. User flagged for quarantine.`
     );
     
-    // Mark user as suspicious in verification service
+    //  ทำเครื่องหมายผู้ใช้ว่าน่าสงสัย
     const { markSuspiciousUser } = require('./verificationService');
     markSuspiciousUser(userId);
     
@@ -77,27 +66,27 @@ async function flagSuspiciousUser(userId, guildId, failureCount) {
   }
 }
 
-/**
- * Apply quarantine role to a user
- * @param {Guild} guild - Discord guild object
- * @param {string} userId - Discord user ID
- */
+//  ใช้บทบาทการกักกัน
 async function applyQuarantineRole(guild, userId) {
   try {
+    //  ดึงค่า config ของ guild
     const config = await getGuildConfig(guild.id);
     if (!config.quarantine_role) {
       console.log(`No quarantine role configured for guild ${guild.id}`);
       return false;
     }
     
+    //  ดึงข้อมูลสมาชิก
     const member = await guild.members.fetch(userId).catch(() => null);
     if (!member) {
       console.log(`User ${userId} not found in guild ${guild.id}`);
       return false;
     }
     
+    //  เพิ่มบทบาทการกักกัน
     await member.roles.add(config.quarantine_role, 'Captcha abuse detection - automatic quarantine');
     
+    //  บันทึกเหตุการณ์การใช้บทบาทการกักกัน
     const { logGenericEvent } = require('../utils/loggingService');
     await logGenericEvent(
       guild,
@@ -113,16 +102,13 @@ async function applyQuarantineRole(guild, userId) {
   }
 }
 
-/**
- * Get failure count for a user
- * @param {string} userId - Discord user ID
- * @returns {number} Current failure count
- */
+//  ดึงจำนวนการล้มเหลว
 function getFailureCount(userId) {
   const data = userFailureData.get(userId);
   if (!data) return 0;
   
   const now = Date.now();
+  //  ลบข้อมูลถ้าหมดเวลาหน้าต่าง
   if (now - data.firstFailure > FAILURE_WINDOW_MS) {
     userFailureData.delete(userId);
     return 0;
@@ -131,21 +117,17 @@ function getFailureCount(userId) {
   return data.failures;
 }
 
-/**
- * Clear failure data for a user (e.g., after successful verification)
- * @param {string} userId - Discord user ID
- */
+//  ล้างข้อมูลการล้มเหลว
 function clearFailureData(userId) {
   userFailureData.delete(userId);
 }
 
-/**
- * Cleanup old failure data to prevent memory leaks
- */
+//  ล้างข้อมูลการล้มเหลวที่หมดอายุ
 function cleanupFailureData() {
   const now = Date.now();
   const cutoff = now - FAILURE_WINDOW_MS;
   
+  //  ลบข้อมูลที่หมดอายุ
   for (const [userId, data] of userFailureData.entries()) {
     if (data.firstFailure < cutoff) {
       userFailureData.delete(userId);
@@ -153,12 +135,10 @@ function cleanupFailureData() {
   }
 }
 
-/**
- * Get statistics about captcha abuse detection
- * @returns {Object} Statistics object
- */
+//  ดึงสถิติการใช้งานในทางที่ผิด
 function getAbuseStats() {
   const now = Date.now();
+  //  กรองผู้ใช้ที่ยังใช้งานอยู่ในหน้าต่างเวลา
   const activeUsers = Array.from(userFailureData.entries()).filter(([_, data]) => 
     now - data.firstFailure <= FAILURE_WINDOW_MS
   );
@@ -172,9 +152,10 @@ function getAbuseStats() {
   };
 }
 
-// Start cleanup interval
+//  ตั้งค่าการล้างข้อมูลอัตโนมัติ
 setInterval(cleanupFailureData, CLEANUP_INTERVAL_MS);
 
+//  exports
 module.exports = {
   recordCaptchaFailure,
   applyQuarantineRole,

@@ -1,81 +1,65 @@
-// path: src/security/autoLockdown.js
-//
-// Auto-lockdown system: protects the server during extreme raid conditions.
-// When joins exceed LOCKDOWN_JOIN_THRESHOLD within LOCKDOWN_TIME_WINDOW_MS,
-// lockdown activates. During lockdown, verification is required before access;
-// verification difficulty increases and queue is slowed.
 
+//  ค่า configuration
 const { config } = require('../config');
+//  การบันทึก log
 const { logEvent, logError } = require('../utils/logger');
 
+//  สถานะ lockdown
 let lockdownActive = false;
 let lockdownUntil = 0;
 
-/** Joins above this within LOCKDOWN_TIME_WINDOW_MS trigger lockdown. */
+//  ค่าเกณฑ์ lockdown
 const LOCKDOWN_JOIN_THRESHOLD = 50;
-/** Time window (ms) in which joins are counted for lockdown. */
 const LOCKDOWN_TIME_WINDOW_MS = 10000;
-/** How long lockdown stays active after activation. */
 const LOCKDOWN_DURATION_MS = 120000;
 
-/** Safe mode activation thresholds */
+//  ค่าเกณฑ์ safe mode
 const SAFE_MODE_JOIN_THRESHOLD = 75;
-const SAFE_MODE_DURATION_MS = 10 * 60 * 1000; // 10 minutes
+const SAFE_MODE_DURATION_MS = 10 * 60 * 1000;
 
-/** Recent join timestamps for lockdown detection (separate from raid detection). */
+//  การติดตามการเข้าร่วมล่าสุด
 let lockdownRecentJoins = [];
 let safeModeActive = false;
 let safeModeUntil = 0;
 
-/**
- * Check if join count exceeds lockdown threshold and activate if needed.
- * Call from raidDetection after recording a join.
- * @param {Guild} guild
- * @param {number} recentJoinCount - Number of joins in the time window
- */
+//  ตรวจสอบและเปิดการใช้งาน lockdown ตามจำนวนการเข้าร่วม
 async function checkAndActivateLockdown(guild, recentJoinCount) {
   const now = Date.now();
+  //  กรองการเข้าร่วมล่าสุดในช่วงเวลา
   lockdownRecentJoins = lockdownRecentJoins.filter(
     (ts) => now - ts <= LOCKDOWN_TIME_WINDOW_MS,
   );
 
-  // Check for safe mode activation first (higher threshold)
+  //  ตรวจสอบค่าเกณฑ์ safe mode
   if (recentJoinCount >= SAFE_MODE_JOIN_THRESHOLD && !safeModeActive) {
     await activateSafeMode(guild);
   }
-  // Check for lockdown activation
+  //  ตรวจสอบค่าเกณฑ์ lockdown
   else if (recentJoinCount >= LOCKDOWN_JOIN_THRESHOLD && !lockdownActive) {
     await activateLockdown(guild);
   }
   
-  // Continue monitoring for safe mode if lockdown is already active
+  //  อัปเกรดเป็น safe mode ถ้ายังสูง
   if (lockdownActive && recentJoinCount >= SAFE_MODE_JOIN_THRESHOLD && !safeModeActive) {
     await activateSafeMode(guild);
   }
 }
 
-/**
- * Activate lockdown mode. Logs to Discord and sets internal state.
- * @param {Guild} [guild] - Optional guild for log channel
- */
+//  เปิดการใช้งานโหมด lockdown
 async function activateLockdown(guild) {
   lockdownActive = true;
   lockdownUntil = Date.now() + LOCKDOWN_DURATION_MS;
 
+  //  ข้อความ lockdown
   const message =
-    `🔒 **LOCKDOWN ACTIVATED** - Extreme raid detected. ` +
-    `New users must complete verification before accessing channels. ` +
-    `Lockdown will auto-disable in ${LOCKDOWN_DURATION_MS / 1000}s.`;
+    `🔒 **LOCKDOWN ACTIVATED** - การโจมตีแบบ Extreme ตรวจพบ ` +
+    `ผู้ใช้ใหม่ต้องทำการยืนยันตัวตนเพื่อเข้าถึงช่อง ` +
+    `Lockdown จะปิดอัตโนมัติใน ${LOCKDOWN_DURATION_MS / 1000}s.`;
 
+  //  บันทึกการเปิด lockdown
   if (guild && config.LOG_CHANNEL_ID) {
     try {
       await logEvent(guild, 'Lockdown activated', message);
-      
-      // Apply lockdown actions:
-      // 1. Disable new member chat permissions (handled by existing role system)
-      // 2. Increase captcha difficulty (handled by verification service)
-      // 3. Slow verification queue (handled by join queue system)
-      
       console.log(`Lockdown activated for guild ${guild?.id || 'unknown'}`);
     } catch (err) {
       logError('autoLockdown activateLockdown log', err);
@@ -83,19 +67,18 @@ async function activateLockdown(guild) {
   }
 }
 
-/**
- * Activate safe mode when raid continues despite lockdown
- * @param {Guild} [guild] - Optional guild for log channel
- */
+//  เปิดการใช้งาน safe mode
 async function activateSafeMode(guild) {
   safeModeActive = true;
   safeModeUntil = Date.now() + SAFE_MODE_DURATION_MS;
 
+  //  ข้อความ safe mode
   const message =
-    `🚨 **SAFE MODE ACTIVATED** - Critical raid detected. ` +
-    `Maximum security measures enabled. ` +
-    `Safe mode will auto-disable in ${SAFE_MODE_DURATION_MS / 1000}s.`;
+    `🚨 **SAFE MODE ACTIVATED** - การโจมตีแบบ Critical ตรวจพบ ` +
+    `มาตรการรักษาความปลอดภัยสูงสุดถูกเปิดใช้งาน ` +
+    `Safe mode จะปิดอัตโนมัติใน ${SAFE_MODE_DURATION_MS / 1000}s.`;
 
+  //  บันทึกการเปิด safe mode
   if (guild && config.LOG_CHANNEL_ID) {
     try {
       await logEvent(guild, 'Safe mode activated', message);
@@ -106,27 +89,22 @@ async function activateSafeMode(guild) {
   }
 }
 
-/**
- * Deactivate lockdown mode. Call manually (e.g. /security unlock) or when timer expires.
- */
+//  ปิดการใช้งานโหมด lockdown
 function deactivateLockdown() {
   lockdownActive = false;
   lockdownUntil = 0;
 }
 
-/**
- * Deactivate safe mode manually.
- */
+//  ปิดการใช้งาน safe mode
 function deactivateSafeMode() {
   safeModeActive = false;
   safeModeUntil = 0;
 }
 
-/**
- * Check if lockdown is currently active. Call periodically to auto-expire.
- */
+//  ตรวจสอบว่า lockdown ทำงานอยู่หรือไม่
 function isLockdownActive() {
   const now = Date.now();
+  //  ปิดอัตโนมัติถ้าหมดเวลา
   if (now > lockdownUntil) {
     lockdownActive = false;
     lockdownUntil = 0;
@@ -135,11 +113,10 @@ function isLockdownActive() {
   return lockdownActive;
 }
 
-/**
- * Check if safe mode is currently active. Call periodically to auto-expire.
- */
+//  ตรวจสอบว่า safe mode ทำงานอยู่หรือไม่
 function isSafeModeActive() {
   const now = Date.now();
+  //  ปิดอัตโนมัติถ้าหมดเวลา
   if (now > safeModeUntil) {
     safeModeActive = false;
     safeModeUntil = 0;
@@ -148,13 +125,12 @@ function isSafeModeActive() {
   return safeModeActive;
 }
 
-/**
- * Record a join for lockdown detection. Call from recordJoin in raidDetection.
- */
+//  บันทึก timestamp การเข้าร่วมสำหรับการติดตาม lockdown
 function recordJoinForLockdown() {
   lockdownRecentJoins.push(Date.now());
 }
 
+//  exports
 module.exports = {
   activateLockdown,
   deactivateLockdown,

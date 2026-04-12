@@ -1,39 +1,39 @@
 # syntax = docker/dockerfile:1
 
-# Adjust NODE_VERSION as desired
+# ปรับ NODE_VERSION ตามที่ต้องการ
 ARG NODE_VERSION=25.2.1
 FROM node:${NODE_VERSION}-slim AS base
 
 LABEL fly_launch_runtime="Node.js"
 
-# Node.js app lives here
+# แอปพลิเคชัน Node.js อยู่ที่นี่
 WORKDIR /app
 
-# Set production environment
+# ตั้งค่าสภาพแวดล้อม production
 ENV NODE_ENV="production"
 
 
-# Throw-away build stage to reduce size of final image
+# สเตจ build แบบใช้ครั้งเดียวเพื่อลดขนาดอิเมจสุดท้าย
 FROM base AS build
 
-# Install packages needed to build node modules
+# ติดตั้งแพ็กเกจที่จำเป็นสำหรับสร้าง node modules
 RUN apt-get update -qq && \
     apt-get install --no-install-recommends -y build-essential node-gyp pkg-config python-is-python3
 
-# Install node modules
+# ติดตั้ง node modules
 COPY package-lock.json package.json ./
 RUN npm ci
 
-# Copy application code
+# คัดลอกโค้ดแอปพลิเคชัน
 COPY . .
 
 
-# Final stage for app image
+# สเตจสุดท้ายสำหรับอิเมจแอป
 FROM base
 
-# Copy built application
+# คัดลอกแอปพลิเคชันที่สร้างแล้ว
 COPY --from=build /app /app
 
-# Start the server by default, this can be overwritten at runtime
+#  เริ่มเซิร์ฟเวอร์ตามค่าเริ่มต้น สามารถเปลี่ยนแปลงได้ขณะรันไทม์
 EXPOSE 3000
 CMD [ "npm", "run", "start" ]

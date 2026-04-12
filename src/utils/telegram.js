@@ -1,30 +1,28 @@
-// path: src/utils/telegram.js
-//
-// Telegram integration for sending alerts and notifications
 
+//  นำเข้า https module
 const https = require('https');
 
-/**
- * Send message to Telegram chat
- * @param {string} message - Message to send
- * @returns {Promise<boolean>} True if sent successfully
- */
+//  ส่งข้อความไปยัง Telegram
 async function sendTelegramMessage(message) {
   const { config } = require('../config');
   
+  //  ตรวจสอบว่ามี credentials สำหรับ Telegram
   if (!config.TELEGRAM_BOT_TOKEN || !config.TELEGRAM_CHAT_ID) {
     console.log('⚠️ Telegram credentials not configured, skipping message');
     return false;
   }
 
+  //  สร้าง URL สำหรับ Telegram API
   const url = `https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`;
   
+  //  สร้างข้อมูลที่จะส่ง
   const postData = JSON.stringify({
     chat_id: config.TELEGRAM_CHAT_ID,
     text: message,
     parse_mode: 'HTML'
   });
 
+  //  สร้าง HTTP request ไปยัง Telegram API
   return new Promise((resolve) => {
     const req = https.request(url, {
       method: 'POST',
@@ -34,8 +32,10 @@ async function sendTelegramMessage(message) {
       }
     }, (res) => {
       let data = '';
+      //  รวมข้อมูลที่ได้รับ
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
+        //  ตรวจสอบสถานะการตอบกลับ
         if (res.statusCode === 200) {
           console.log('✅ Telegram message sent successfully');
           resolve(true);
@@ -46,24 +46,21 @@ async function sendTelegramMessage(message) {
       });
     });
 
+    //  จัดการ error
     req.on('error', (err) => {
       console.log('❌ Telegram request error:', err.message);
       resolve(false);
     });
 
+    //  ส่งข้อมูลและปิด connection
     req.write(postData);
     req.end();
   });
 }
 
-/**
- * Send raid alert to Telegram
- * @param {Object} raidData - Raid information
- * @param {number} raidData.joinCount - Number of joins
- * @param {number} raidData.timeWindow - Time window in seconds
- * @param {string} raidData.guildName - Server name
- */
+//  ส่งแจ้งเตือนการโจมตี Raid
 async function sendRaidAlert(raidData) {
+  //  สร้างข้อความแจ้งเตือน Raid
   const message = `
 🚨 <b>RAID DETECTED</b> 🚨
 
@@ -80,15 +77,9 @@ Check server security and consider enabling lockdown mode.
   return await sendTelegramMessage(message);
 }
 
-/**
- * Send suspicious account alert to Telegram
- * @param {Object} userData - User information
- * @param {string} userData.username - User's username
- * @param {string} userData.userId - User's Discord ID
- * @param {number} userData.accountAge - Account age in days
- * @param {string} userData.guildName - Server name
- */
+//  ส่งแจ้งเตือนบัญชีที่น่าสงสัย
 async function sendSuspiciousAccountAlert(userData) {
+  //  สร้างข้อความแจ้งเตือนบัญชีน่าสงสัย
   const message = `
 🔍 <b>SUSPICIOUS ACCOUNT DETECTED</b> 🔍
 
@@ -105,16 +96,9 @@ Account is less than 7 days old. Monitor this user closely.
   return await sendTelegramMessage(message);
 }
 
-/**
- * Send verification failure alert to Telegram
- * @param {Object} failData - Failure information
- * @param {string} failData.username - User's username
- * @param {string} failData.userId - User's Discord ID
- * @param {number} failData.attemptCount - Number of failed attempts
- * @param {string} failData.action - Action taken (kick/warn)
- * @param {string} failData.guildName - Server name
- */
+//  ส่งแจ้งเตือนการยืนยันตัวตนล้มเหลว
 async function sendVerificationFailureAlert(failData) {
+  //  สร้างข้อความแจ้งเตือนการยืนยันตัวตนล้มเหลว
   const message = `
 ❌ <b>VERIFICATION FAILED</b> ❌
 
@@ -132,15 +116,9 @@ ${failData.action === 'kick' ? 'User has been kicked from the server.' : 'User h
   return await sendTelegramMessage(message);
 }
 
-/**
- * Send user kicked alert to Telegram
- * @param {Object} kickData - Kick information
- * @param {string} kickData.username - User's username
- * @param {string} kickData.userId - User's Discord ID
- * @param {string} kickData.reason - Reason for kick
- * @param {string} kickData.guildName - Server name
- */
+//  ส่งแจ้งเตือนผู้ใช้ถูกเตะ
 async function sendUserKickedAlert(kickData) {
+  //  สร้างข้อความแจ้งเตือนผู้ใช้ถูกเตะ
   const message =`
 👢 <b>USER KICKED</b> 👢
 
@@ -159,6 +137,7 @@ ${new Date().toLocaleString('th-TH')}
   return await sendTelegramMessage(message);
 }
 
+//  exports
 module.exports = {
   sendTelegramMessage,
   sendRaidAlert,

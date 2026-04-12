@@ -1,20 +1,13 @@
-// path: src/utils/loggingService.js
-//
-// Centralized logging service for the captcha verification system.
-// Provides semantic log methods that write to file and Discord log channel (embeds).
 
+//  นำเข้า logger
 const { logEvent, logError } = require('./logger');
 
-/**
- * Log when a user joins the server.
- */
+//  บันทึกเหตุการณ์ผู้ใช้เข้าร่วม
 async function logUserJoined(guild, userTag, userId) {
   await logEvent(guild, 'User joined', `User joined: ${userTag} (${userId})`);
 }
 
-/**
- * Log when a user starts the captcha flow (opens the verify modal).
- */
+//  บันทึกเหตุการณ์เริ่ม captcha
 async function logCaptchaStarted(guild, userTag, userId) {
   await logEvent(
     guild,
@@ -23,9 +16,7 @@ async function logCaptchaStarted(guild, userTag, userId) {
   );
 }
 
-/**
- * Log when a user fails a captcha attempt. Use attemptNumber 1–3 and maxAttempts 3.
- */
+//  บันทึกเหตุการณ์ captcha ผิด
 async function logCaptchaFailed(guild, userTag, userId, attemptNumber, maxAttempts) {
   await logEvent(
     guild,
@@ -34,9 +25,7 @@ async function logCaptchaFailed(guild, userTag, userId, attemptNumber, maxAttemp
   );
 }
 
-/**
- * Log when a user successfully completes captcha verification.
- */
+//  บันทึกเหตุการณ์ captcha สำเร็จ
 async function logCaptchaSuccess(guild, userTag, userId) {
   await logEvent(
     guild,
@@ -45,9 +34,7 @@ async function logCaptchaSuccess(guild, userTag, userId) {
   );
 }
 
-/**
- * Log when a user is kicked (e.g. failed 3 attempts or timeout).
- */
+//  บันทึกเหตุการณ์ผู้ใช้ถูกเตะ
 async function logUserKicked(guild, userTag, userId, reason) {
   await logEvent(
     guild,
@@ -56,13 +43,12 @@ async function logUserKicked(guild, userTag, userId, reason) {
   );
 }
 
-/**
- * Generic event log (for raid, suspicious account, etc.).
- */
+//  บันทึกเหตุการณ์ทั่วไป
 async function logGenericEvent(guild, type, description) {
   await logEvent(guild, type, description);
 }
 
+//  exports
 module.exports = {
   logUserJoined,
   logCaptchaStarted,
@@ -71,11 +57,14 @@ module.exports = {
   logUserKicked,
   logGenericEvent,
   logError,
+  //  alias สำหรับ verification
   logVerificationSuccess: logCaptchaSuccess,
   logVerificationFailure: logCaptchaFailed,
+  //  บันทึกบัญชีที่น่าสงสัย
   logSuspiciousAccount: async (guild, userTag, userId, accountAge) => {
     await logEvent(guild, 'Suspicious account', `Suspicious account detected: ${userTag} (${userId}) - Account age: ${accountAge} days`);
   },
+  //  บันทึกการตรวจจับ raid
   logRaidDetected: async (guild, joinCount, timeWindow) => {
     await logEvent(guild, 'Raid detected', `RAID DETECTED: ${joinCount} users joined in ${timeWindow} seconds`);
   },

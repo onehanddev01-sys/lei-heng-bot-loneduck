@@ -1,26 +1,20 @@
-// path: src/system/gracefulShutdown.js
-//
-// Graceful shutdown handling: handles SIGINT and SIGTERM signals to safely
-// shut down the bot, saving state and cleaning up resources.
 
+//  นำเข้า logger สำหรับบันทึก error
 const { logError } = require('../utils/logger');
 
+//  สถานะการปิดระบบ
 let isShuttingDown = false;
+//  callbacks สำหรับการปิดระบบ
 let shutdownCallbacks = [];
 
-/**
- * Register a callback to be called during shutdown
- * @param {Function} callback - Async function to call during shutdown
- */
+// ลงทะเบียน callback สำหรับการปิดระบบ
 function registerShutdownCallback(callback) {
   shutdownCallbacks.push(callback);
 }
 
-/**
- * Perform graceful shutdown
- * @param {string} signal - Signal that triggered shutdown (SIGINT or SIGTERM)
- */
+//  ดำเนินการปิดระบบอย่างสมบูรณ์
 async function performGracefulShutdown(signal) {
+  // ป้องกันการปิดระบบซ้ำซ้อน
   if (isShuttingDown) {
     console.log('Shutdown already in progress, ignoring signal');
     return;
@@ -30,10 +24,10 @@ async function performGracefulShutdown(signal) {
   console.log(`\n🔄 Received ${signal}, starting graceful shutdown...`);
 
   try {
-    // 1. Stop accepting new verification sessions
+    // หยุดการเริ่มต้น verification sessions ใหม่
     console.log('📋 Stopping new verification sessions...');
     
-    // 2. Save active state to persistent storage
+    // บันทึกสถานะที่ทำงานอยู่
     console.log('💾 Saving active state...');
     try {
       const { saveGuildConfigs } = require('../utils/guildConfig');
@@ -42,7 +36,7 @@ async function performGracefulShutdown(signal) {
       logError('gracefulShutdown save state', saveErr);
     }
     
-    // 3. Finish processing current verification queue
+    // หยุด verification queue
     console.log('⏳ Finishing current verification queue...');
     try {
       const { stopWorker } = require('../security/joinQueue');
@@ -51,7 +45,7 @@ async function performGracefulShutdown(signal) {
       logError('gracefulShutdown stop queue', queueErr);
     }
     
-    // 4. Stop health monitoring systems
+    // หยุดการตรวจสอบสุขภาพระบบ
     console.log('🏥 Stopping health monitoring...');
     try {
       const { stopHealthMonitor } = require('../system/healthMonitor');
@@ -60,7 +54,7 @@ async function performGracefulShutdown(signal) {
       logError('gracefulShutdown stop health monitor', healthErr);
     }
     
-    // 5. Call registered shutdown callbacks (cleanup tasks)
+    // รัน shutdown callbacks
     console.log('🔧 Running shutdown callbacks...');
     for (const callback of shutdownCallbacks) {
       try {
@@ -70,27 +64,26 @@ async function performGracefulShutdown(signal) {
       }
     }
     
-    // 6. Disconnect safely from Discord API
+    // ตัดการเชื่อมต่อจาก Discord
     console.log('🔌 Disconnecting from Discord...');
     
-    // Give a moment for final operations to complete
+    // รอ 1 วินาที
     await new Promise(resolve => setTimeout(resolve, 1000));
     
+    // การปิดระบบสำเร็จ
     console.log('✅ Graceful shutdown completed successfully');
     process.exit(0);
   } catch (err) {
+    //  เกิดข้อผิดพลาดระหว่างการปิดระบบ
     logError('gracefulShutdown unexpected error', err);
     console.error('❌ Error during graceful shutdown, forcing exit');
     process.exit(1);
   }
 }
 
-/**
- * Initialize graceful shutdown handlers
- * @param {Client} client - Discord client instance
- */
+//  ตั้งค่า handlers สำหรับการปิดระบบอย่างสมบูรณ์
 function initializeGracefulShutdown(client) {
-  // Register Discord client cleanup
+  // ลงทะเบียน callback สำหรับตัดการเชื่อมต่อ Discord
   registerShutdownCallback(async () => {
     if (client && client.isReady()) {
       try {
@@ -102,16 +95,17 @@ function initializeGracefulShutdown(client) {
     }
   });
 
-  // Handle process signals
+  //  handler สำหรับ SIGINT (Ctrl+C)
   process.on('SIGINT', () => {
     performGracefulShutdown('SIGINT');
   });
 
+  //  handler สำหรับ SIGTERM (termination signal)
   process.on('SIGTERM', () => {
     performGracefulShutdown('SIGTERM');
   });
 
-  // Handle uncaught exceptions that might occur during shutdown
+  //  handler สำหรับ uncaught exception
   process.on('uncaughtException', (err) => {
     if (isShuttingDown) {
       console.error('Uncaught exception during shutdown:', err);
@@ -119,6 +113,7 @@ function initializeGracefulShutdown(client) {
     }
   });
 
+  //  handler สำหรับ unhandled rejection
   process.on('unhandledRejection', (reason, promise) => {
     if (isShuttingDown) {
       console.error('Unhandled rejection during shutdown:', reason);
@@ -129,14 +124,12 @@ function initializeGracefulShutdown(client) {
   console.log('🛡️ Graceful shutdown handlers initialized');
 }
 
-/**
- * Check if shutdown is in progress
- * @returns {boolean} True if shutting down
- */
+// ตรวจสอบว่ากำลังปิดระบบอยู่หรือไม่
 function isShuttingDownInProgress() {
   return isShuttingDown;
 }
 
+//  exports
 module.exports = {
   registerShutdownCallback,
   performGracefulShutdown,

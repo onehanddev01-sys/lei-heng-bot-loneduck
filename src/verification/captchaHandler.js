@@ -1,11 +1,4 @@
-// path: src/verification/captchaHandler.js
-//
-// Captcha UI and validation: image-based captcha generation, modal, validation.
-// Uses svg-captcha for image generation and sharp for SVG to PNG conversion. No session state; verificationService owns state.
-//
-// SCALING: Captcha generation is CPU-bound. For high load, consider a dedicated
-// worker pool or external captcha service (e.g. hCaptcha) to offload from main process.
-
+//  คอมโพเนนต์ Discord.js
 const {
   EmbedBuilder,
   ActionRowBuilder,
@@ -16,60 +9,57 @@ const {
   TextInputStyle,
   AttachmentBuilder,
 } = require('discord.js');
+//  การสร้าง SVG captcha
 const svgCaptcha = require('svg-captcha');
+//  การประมวลผลภาพ
 const sharp = require('sharp');
+//  ค่า configuration
 const { config } = require('../config');
 
-/** Length of captcha code: 5–6 alphanumeric characters. */
+//  การตั้งค่า captcha
 const IMAGE_CAPTCHA_LENGTH = 6;
 const IMAGE_WIDTH = 300;
 const IMAGE_HEIGHT = 100;
 
-// Captcha generation rate tracking
+//  การติดตามการสร้าง captcha
 let captchaGenerationCount = 0;
 let captchaRateWindowStart = Date.now();
 
-// Reset interval to prevent memory leaks
+//  รีเซ็ตจำนวนการสร้าง captcha ทุกนาที
 setInterval(() => {
   captchaGenerationCount = 0;
   captchaRateWindowStart = Date.now();
-}, 60000); // Reset every 60 seconds
+}, 60000);
 
-/**
- * Get captcha generation rate (per minute)
- */
+//  ดึงอัตราการสร้าง captcha ต่อนาที
 function getCaptchaGenerationRate() {
   const now = Date.now();
   const windowMs = now - captchaRateWindowStart;
   
+  //  รีเซ็ตถ้าหน้าต่างหมดอายุ
   if (windowMs >= 60000) {
     captchaGenerationCount = 0;
     captchaRateWindowStart = now;
     return 0;
   }
   
+  //  คำนวณอัตรา
   const rate = Math.round((captchaGenerationCount / windowMs) * 60000);
   return rate;
 }
 
-/**
- * Track captcha generation
- */
+//  ติดตามการสร้าง captcha
 function trackCaptchaGeneration() {
   captchaGenerationCount++;
 }
 
-/**
- * Generate an image-based captcha (non-blocking).
- * Uses svg-captcha and sharp to avoid native dependencies.
- * @param {boolean} [harder] - If true, use longer captcha (e.g. during lockdown).
- * @returns {Promise<{ buffer: Buffer, text: string }>}
- */
+//  สร้าง image captcha
 async function generateImageCaptcha(harder = false) {
   trackCaptchaGeneration();
+  //  ปรับความยาวสำหรับโหมดยากขึ้น
   const length = harder ? 8 : IMAGE_CAPTCHA_LENGTH;
   
-  // Generate SVG captcha
+  //  สร้าง SVG captcha
   const captcha = svgCaptcha.create({
     length: length,
     size: 6,
@@ -78,7 +68,7 @@ async function generateImageCaptcha(harder = false) {
     background: '#ffffff'
   });
   
-  // Convert SVG to PNG buffer using sharp
+  //  แปลง SVG เป็น PNG
   const buffer = await sharp(Buffer.from(captcha.data))
     .resize(IMAGE_WIDTH, IMAGE_HEIGHT)
     .png()
@@ -87,9 +77,7 @@ async function generateImageCaptcha(harder = false) {
   return { buffer, text: captcha.text };
 }
 
-/**
- * Build the verify panel embed + button for #welcome (discord.js v14).
- */
+//  สร้าง embed สำหรับ panel การยืนยันตัวตน
 function buildVerifyPanelEmbed() {
   const embed = new EmbedBuilder()
     .setTitle(`ยินดีต้อนรับสู่ ${config.SERVER_NAME}`)
@@ -98,6 +86,7 @@ function buildVerifyPanelEmbed() {
     )
     .setColor(0x00ae86);
 
+  //  สร้างปุ่ม verify
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('verify_start')
@@ -108,13 +97,9 @@ function buildVerifyPanelEmbed() {
   return { embed, components: [row] };
 }
 
-/**
- * Build ephemeral reply payload with captcha image + "Enter code" button.
- * Used when user clicks Verify: show image, then they click button to open modal.
- * @param {Buffer} buffer - PNG buffer from generateImageCaptcha
- * @returns {{ embeds: EmbedBuilder[], files: AttachmentBuilder[], components: ActionRowBuilder[] }}
- */
+//  สร้างการตอบกลับสำหรับรูป captcha
 function buildCaptchaImageReply(buffer) {
+  //  สร้าง attachment
   const attachment = new AttachmentBuilder(buffer, { name: 'captcha.png' });
   const embed = new EmbedBuilder()
     .setTitle('ยืนยันตัวตน - กรอกรหัส')
@@ -122,6 +107,7 @@ function buildCaptchaImageReply(buffer) {
     .setImage('attachment://captcha.png')
     .setColor(0x00ae86);
 
+  //  สร้างปุ่มกรอกรหัส
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('verify_enter_code')
@@ -137,15 +123,13 @@ function buildCaptchaImageReply(buffer) {
   };
 }
 
-/**
- * Build modal for entering the captcha code (image-based flow).
- * User sees the image first, then opens this modal to type the code.
- */
+//  สร้าง modal สำหรับ captcha รูปภาพ
 function buildCaptchaModalForImage() {
   const modal = new ModalBuilder()
     .setCustomId('verify_submit')
     .setTitle('กรอกรหัส Captcha');
 
+  //  สร้าง text input
   const input = new TextInputBuilder()
     .setCustomId('captcha_code')
     .setLabel('กรอกรหัสตามที่เห็นในรูป (ตัวอักษรและตัวเลข)')
@@ -160,27 +144,28 @@ function buildCaptchaModalForImage() {
   return modal;
 }
 
-/**
- * Validate user input against expected captcha code.
- * Case-insensitive for alphanumeric codes.
- * @returns {{ valid: boolean, normalizedInput?: string, errorMessage?: string }}
- */
+//  ตรวจสอบข้อมูล captcha
 function validateCaptchaInput(rawInput, expectedCode) {
+  //  ทำให้ข้อมูลเป็นมาตรฐาน
   const normalized = (rawInput || '').trim().toUpperCase();
   const expected = (expectedCode || '').toUpperCase();
 
+  //  ตรวจสอบว่าข้อมูลมีแต่ตัวอักษรและตัวเลขเท่านั้น
   if (!/^[A-Z0-9]+$/i.test((rawInput || '').trim())) {
     return {
       valid: false,
       errorMessage: 'รหัสต้องเป็นตัวอักษรหรือตัวเลขเท่านั้น กรุณาลองใหม่อีกครั้ง.',
     };
   }
+  //  ตรวจสอบว่าข้อมูลตรงกับรหัสที่คาดหวมหรือไม่
   if (normalized !== expected) {
     return { valid: false, normalizedInput: normalized };
   }
+  //  ข้อมูลถูกต้อง
   return { valid: true, normalizedInput: normalized };
 }
 
+//  exports
 module.exports = {
   generateImageCaptcha,
   buildVerifyPanelEmbed,

@@ -1,10 +1,9 @@
-// path: src/commands/setup.js
-//
-// Setup command: allows admins to configure bot settings per guild.
-// Stores configuration in JSON database for persistence.
 
+//  Discord.js คำสั่ง slash สิทธิ์ และ embeds  
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+//  การบันทึกข้อผิดพลาด  
 const { logError } = require('../utils/logger');
+//  การตั้งค่า guild การตรวจสอบช่องทางและบทบาท  
 const { 
   getGuildConfig, 
   setGuildConfig, 
@@ -12,14 +11,16 @@ const {
   validateRoleAccess
 } = require('../utils/guildConfig');
 
+//  ชื่อคำสั่ง  
 const COMMAND_NAME = 'setup';
 
-/** Build the /setup slash command definition. */
+//  สร้างคำสั่ง setup คำสั่ง slash  
 function buildSetupCommand() {
   return new SlashCommandBuilder()
     .setName(COMMAND_NAME)
     .setDescription('Configure bot settings for this server')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    //  คำสั่งย่อยช่องทางการยืนยันตัวตน  
     .addSubcommand((sc) =>
       sc
         .setName('verification_channel')
@@ -30,6 +31,7 @@ function buildSetupCommand() {
             .setRequired(true)
         )
     )
+    //  คำสั่งย่อยช่องทางบันทึกข้อมูล  
     .addSubcommand((sc) =>
       sc
         .setName('log_channel')
@@ -40,6 +42,7 @@ function buildSetupCommand() {
             .setRequired(true)
         )
     )
+    //  คำสั่งย่อยบทบาทการกักกัน  
     .addSubcommand((sc) =>
       sc
         .setName('quarantine_role')
@@ -50,6 +53,7 @@ function buildSetupCommand() {
             .setRequired(true)
         )
     )
+    //  คำสั่งย่อยบทบาทที่ยืนยันแล้ว  
     .addSubcommand((sc) =>
       sc
         .setName('verified_role')
@@ -60,13 +64,14 @@ function buildSetupCommand() {
             .setRequired(true)
         )
     )
+    //  คำสั่งย่อยสถานะ  
     .addSubcommand((sc) =>
       sc.setName('status')
         .setDescription('Show current configuration')
     );
 }
 
-/** Handle /setup verification_channel subcommand. */
+//  จัดการคำสั่งย่อยช่องทางการยืนยันตัวตน  
 async function handleVerificationChannel(interaction) {
   try {
     const channel = interaction.options.getChannel('channel');
@@ -98,7 +103,7 @@ async function handleVerificationChannel(interaction) {
   }
 }
 
-/** Handle /setup log_channel subcommand. */
+//  จัดการคำสั่งย่อยช่องทางบันทึกข้อมูล  
 async function handleLogChannel(interaction) {
   try {
     const channel = interaction.options.getChannel('channel');
@@ -130,7 +135,7 @@ async function handleLogChannel(interaction) {
   }
 }
 
-/** Handle /setup quarantine_role subcommand. */
+//  จัดการคำสั่งย่อยบทบาทการกักกัน  
 async function handleQuarantineRole(interaction) {
   try {
     const role = interaction.options.getRole('role');
@@ -162,7 +167,7 @@ async function handleQuarantineRole(interaction) {
   }
 }
 
-/** Handle /setup verified_role subcommand. */
+//  จัดการคำสั่งย่อยบทบาทที่ยืนยันแล้ว  
 async function handleVerifiedRole(interaction) {
   try {
     const role = interaction.options.getRole('role');
@@ -194,7 +199,7 @@ async function handleVerifiedRole(interaction) {
   }
 }
 
-/** Handle /setup status subcommand. */
+//  จัดการคำสั่งย่อยสถานะ  
 async function handleStatus(interaction) {
   try {
     const guild = interaction.guild;
@@ -237,7 +242,7 @@ async function handleStatus(interaction) {
   }
 }
 
-/** Handle /setup command. */
+//  ตัวจัดการคำสั่ง setup หลัก  
 async function handleSetupCommand(interaction) {
   const subcommand = interaction.options.getSubcommand();
 
@@ -254,6 +259,7 @@ async function handleSetupCommand(interaction) {
   }
 }
 
+//  การส่งออกโมดูล  
 module.exports = {
   buildSetupCommand,
   handleSetupCommand,

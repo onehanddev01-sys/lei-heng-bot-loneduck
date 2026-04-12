@@ -1,26 +1,20 @@
-// path: src/security/unverifiedRegistry.js
-//
-// Central registry for unverified users. Replaces N individual setTimeout calls
-// with a single sweep interval to prevent timer explosion during raids (500+ joins).
 
+//  ค่ากำหนด  
 const { config } = require('../config');
+//  บริการบันทึกข้อมูล  
 const { logError, logUserKicked } = require('../utils/loggingService');
 
-/** userId -> { guildId, userTag, joinTime } */
+//  รีจิสทรีผู้ใช้ที่ยังไม่ยืนยันตัวตน  
 const unverifiedUsers = new Map();
-/** Sweep interval in ms */
-const SWEEP_INTERVAL_MS = 30_000; // 30 seconds
-/** Kick users who haven't verified within this many ms */
-const VERIFY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+//  ช่วงเวลา sweep 30 วินาที  
+const SWEEP_INTERVAL_MS = 30_000;
+//  หมดเวลาการยืนยันตัวตน 5 นาที  
+const VERIFY_TIMEOUT_MS = 5 * 60 * 1000;
 
+//  ID ช่วงเวลา sweep  
 let sweepIntervalId = null;
 
-/**
- * Register a user as unverified. Call when they join.
- * @param {string} userId
- * @param {string} guildId
- * @param {string} userTag
- */
+//  ลงทะเบียนผู้ใช้ที่ยังไม่ยืนยันตัวตน  
 function register(userId, guildId, userTag) {
   unverifiedUsers.set(userId, {
     guildId,
@@ -29,27 +23,23 @@ function register(userId, guildId, userTag) {
   });
 }
 
-/**
- * Unregister a user (e.g. when they verify successfully).
- * @param {string} userId
- */
+//  ยกเลิกการลงทะเบียนผู้ใช้  
 function unregister(userId) {
   unverifiedUsers.delete(userId);
 }
 
-/**
- * Single sweep: check all registered users, kick those past timeout.
- * Uses a single timer instead of 500+ timers during raids.
- */
+//  sweep ผู้ใช้ที่ยังไม่ยืนยันตัวตน  ถ้าหมดเวลาจะเตะออก  
 async function sweep(client) {
   const now = Date.now();
   const toKick = [];
 
+  //  ค้นหาผู้ใช้ที่จะเตะ  หมดเวลาแล้ว  
   for (const [userId, data] of unverifiedUsers.entries()) {
     if (now - data.joinTime < VERIFY_TIMEOUT_MS) continue;
     toKick.push({ userId, ...data });
   }
 
+  //  เตะผู้ใช้ที่ไม่ได้ยืนยันตัวตน  
   for (const { userId, guildId, userTag } of toKick) {
     unverifiedUsers.delete(userId);
     try {
@@ -59,6 +49,7 @@ async function sweep(client) {
       const member = await guild.members.fetch(userId).catch(() => null);
       if (!member) continue;
 
+      //  ข้ามถ้ายืนยันตัวตนแล้ว  
       if (
         config.VERIFY_ROLE_ID &&
         member.roles.cache.has(config.VERIFY_ROLE_ID)
@@ -66,7 +57,9 @@ async function sweep(client) {
         continue;
       }
 
+      //  เตะผู้ใช้  
       await member.kick('Auto kick: did not verify within 5 minutes.');
+      //  บันทึกการเตะ  
       await logUserKicked(
         guild,
         userTag,
@@ -79,20 +72,16 @@ async function sweep(client) {
   }
 }
 
-/**
- * Start the sweep interval. Call once when client is ready.
- * @param {Client} client - Discord client
- */
+//  เริ่มช่วงเวลา sweep  
 function startSweep(client) {
+  //  ป้องกันการ sweep หลายครั้ง  
   if (sweepIntervalId) return;
   sweepIntervalId = setInterval(() => {
     sweep(client).catch((err) => logError('unverifiedRegistry sweep', err));
   }, SWEEP_INTERVAL_MS);
 }
 
-/**
- * Stop the sweep (e.g. graceful shutdown).
- */
+//  หยุดช่วงเวลา sweep  
 function stopSweep() {
   if (sweepIntervalId) {
     clearInterval(sweepIntervalId);
@@ -100,10 +89,12 @@ function stopSweep() {
   }
 }
 
+//  ดึงจำนวนผู้ใช้ที่ยังไม่ยืนยันตัวตน  
 function getCount() {
   return unverifiedUsers.size;
 }
 
+//  การส่งออกโมดูล  
 module.exports = {
   register,
   unregister,

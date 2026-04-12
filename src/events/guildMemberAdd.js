@@ -1,19 +1,22 @@
-// path: src/events/guildMemberAdd.js
-//
-// Handles new members joining: enqueues for batch processing, raid detection,
-// suspicious account, quarantine, and 5-min verify timeout via central registry.
 
+//  ค่า configuration
 const { config } = require('../config');
+//  บริการ logging
 const { logError, logUserJoined, logUserKicked, logGenericEvent, logSuspiciousAccount } = require('../utils/loggingService');
+//  การแจ้งเตือน Telegram
 const { sendSuspiciousAccountAlert } = require('../utils/telegram');
+//  การตรวจจับ raid
 const { recordJoin } = require('../security/raidDetection');
+//  ระบบ lockdown
 const { isLockdownActive } = require('../security/autoLockdown');
+//  คิวการเข้าร่วม
 const { enqueue } = require('../security/joinQueue');
+//  รีจิสทรีผู้ไม่ยืนยันตัวตน
 const { register: registerUnverified } = require('../security/unverifiedRegistry');
+//  บริการการยืนยันตัวตน
 const { markSuspiciousUser, getAccountAgeDays } = require('../verification/verificationService');
 
-// Compute a basic risk score for the account.
-// Higher scores indicate more suspicious accounts.
+//  คำนวณคะแนนความเสี่ยงสำหรับผู้ใช้
 function computeRiskScore(user) {
   let score = 0;
 
@@ -21,19 +24,23 @@ function computeRiskScore(user) {
   const accountAgeMs = now - user.createdAt.getTime();
   const oneDayMs = 24 * 60 * 60 * 1000;
 
+  //  บัญชีใหม่ น้อยกว่า 1 วัน
   if (accountAgeMs < oneDayMs) {
     score += 2;
   }
 
+  //  ไม่มี avatar
   if (!user.avatar) {
     score += 1;
   }
 
+  //  ชื่อผู้ใช้ยาว
   const username = user.username || '';
   if (username.length >= 18) {
     score += 1;
   }
 
+  //  ชื่อผู้ใช้มีตัวเลขมาก
   const digitMatches = username.match(/\d/g) || [];
   if (digitMatches.length >= 6) {
     score += 1;
@@ -42,18 +49,25 @@ function computeRiskScore(user) {
   return score;
 }
 
-// Process a single member (called by join queue worker).
+//  ดำเนินการสมาชิกเข้าร่วม
 async function processMemberJoin(member) {
   const { guild, user } = member;
 
+  //  บันทึกการเข้าร่วมสำหรับการตรวจจับ raid
   await recordJoin(guild, user.id);
+  //  บันทึกเหตุการณ์สมาชิกเข้าร่วม
   await logUserJoined(guild, user.tag, user.id);
 
+  //  ตรวจสอบอายุบัญชี
   const ageDays = getAccountAgeDays(user);
 
+  //  บัญชีน่าสงสัย น้อยกว่า 7 วัน
   if (ageDays < 7) {
+    //  ทำเครื่องหมายว่าน่าสงสัย
     markSuspiciousUser(user.id);
+    //  บันทึกบัญชีน่าสงสัย
     await logSuspiciousAccount(guild, user.tag, user.id, Math.floor(ageDays));
+    //  ส่งแจ้งเตือน Telegram
     await sendSuspiciousAccountAlert({
       username: user.tag,
       userId: user.id,
@@ -62,10 +76,12 @@ async function processMemberJoin(member) {
     });
   }
 
+  //  คำนวณคะแนนความเสี่ยง
   const riskScore = computeRiskScore(user);
 
+  //  ผู้ใช้ความเสี่ยงสูง กักกัน
   if (riskScore > 0) {
-    // Only quarantine if risk score is high (>= 3) or during lockdown
+    //  เกณฑ์การกักกัน
     const shouldQuarantine = riskScore >= 3 || (isLockdownActive() && riskScore >= 2);
     if (shouldQuarantine && config.QUARANTINE_ROLE_ID) {
       try {
@@ -73,18 +89,19 @@ async function processMemberJoin(member) {
           guild.roles.cache.get(config.QUARANTINE_ROLE_ID) ||
           (await guild.roles.fetch(config.QUARANTINE_ROLE_ID));
         if (quarantineRole) {
+          //  มอบหมายบทบาทกักกัน
           await member.roles.add(
             quarantineRole,
-            'High risk account placed in quarantine role',
+            'บัญชีความเสี่ยงสูงถูกกักกัน',
           );
         }
       } catch (err) {
-        logError('Failed to assign quarantine role', err);
+        logError('processMemberJoin quarantine', err);
       }
     }
   }
 
-  // During lockdown: all new users get quarantine until they pass captcha.
+  //  โหมด lockdown กักกันสมาชิกใหม่ทั้งหมด
   if (
     isLockdownActive() &&
     config.QUARANTINE_ROLE_ID &&
@@ -95,23 +112,27 @@ async function processMemberJoin(member) {
         guild.roles.cache.get(config.QUARANTINE_ROLE_ID) ||
         (await guild.roles.fetch(config.QUARANTINE_ROLE_ID));
       if (quarantineRole) {
+        //  กักกันสำหรับ lockdown
         await member.roles.add(quarantineRole, 'Lockdown: verify before access');
       }
     } catch (err) {
-      logError('guildMemberAdd lockdown quarantine', err);
+      logError('processMemberJoin lockdown quarantine', err);
     }
   }
 
-  // Register for 5-min auto-kick sweep (single interval, no per-user timers).
+  //  ลงทะเบียนเป็นผู้ไม่ยืนยันตัวตน
   registerUnverified(user.id, guild.id, user.tag);
 }
 
+//  handler สำหรับเหตุการณ์ guild member add
 module.exports = async function handleGuildMemberAdd(member) {
   try {
+    //  ใส่ในคิวสำหรับดำเนินการ
     enqueue(member);
   } catch (err) {
     logError('guildMemberAdd handler failed', err);
   }
 };
 
+//  export ฟังก์ชันดำเนินการ
 module.exports.processMemberJoin = processMemberJoin;

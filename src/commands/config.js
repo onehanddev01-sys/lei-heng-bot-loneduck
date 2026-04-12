@@ -1,25 +1,27 @@
-// path: src/commands/config.js
-//
-// Config command: allows admins to modify bot settings dynamically.
-// Updates configuration in real-time without restarting the bot.
 
+//  Discord.js  slash commands  permissions  embeds  
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+//  error logging  
 const { logError } = require('../utils/logger');
+//  guild configuration  
 const { getGuildConfig, setGuildConfig } = require('../utils/guildConfig');
 
+//  command name  
 const COMMAND_NAME = 'config';
 
-/** Build the /config slash command definition. */
+//  build config command  slash command  
 function buildConfigCommand() {
   return new SlashCommandBuilder()
     .setName(COMMAND_NAME)
     .setDescription('Modify bot configuration settings')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    //  show subcommand  
     .addSubcommand((sc) =>
       sc
         .setName('show')
         .setDescription('Show current configuration')
     )
+    //  telegram subcommand
     .addSubcommand((sc) =>
       sc
         .setName('telegram')
@@ -34,6 +36,7 @@ function buildConfigCommand() {
             )
         )
     )
+    //  raid threshold subcommand  
     .addSubcommand((sc) =>
       sc
         .setName('raid_threshold')
@@ -46,6 +49,7 @@ function buildConfigCommand() {
             .setMaxValue(100)
         )
     )
+    //  account age subcommand  
     .addSubcommand((sc) =>
       sc
         .setName('account_age')
@@ -60,7 +64,7 @@ function buildConfigCommand() {
     );
 }
 
-/** Handle /config show subcommand. */
+//  handle show subcommand  
 async function handleShow(interaction) {
   try {
     const guild = interaction.guild;
@@ -91,7 +95,7 @@ async function handleShow(interaction) {
   }
 }
 
-/** Handle /config telegram subcommand. */
+//  handle telegram subcommand  
 async function handleTelegram(interaction) {
   try {
     const status = interaction.options.getString('status');
@@ -117,7 +121,7 @@ async function handleTelegram(interaction) {
   }
 }
 
-/** Handle /config raid_threshold subcommand. */
+//  handle raid threshold subcommand  
 async function handleRaidThreshold(interaction) {
   try {
     const threshold = interaction.options.getInteger('threshold');
@@ -141,7 +145,7 @@ async function handleRaidThreshold(interaction) {
   }
 }
 
-/** Handle /config account_age subcommand. */
+//  handle account age subcommand  
 async function handleAccountAge(interaction) {
   try {
     const days = interaction.options.getInteger('days');
@@ -165,7 +169,7 @@ async function handleAccountAge(interaction) {
   }
 }
 
-/** Main handler for /config command. */
+//  main config command handler  
 async function handleConfigCommand(interaction) {
   const subcommand = interaction.options.getSubcommand();
   
@@ -190,6 +194,7 @@ async function handleConfigCommand(interaction) {
   }
 }
 
+//  exports  
 module.exports = {
   buildConfigCommand,
   handleConfigCommand,

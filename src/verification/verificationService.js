@@ -1,15 +1,13 @@
-// path: src/verification/verificationService.js
-//
-// Verification flow: image captcha, queue, rate limiting, session cleanup.
-// Production-grade: handles 500+ concurrent joins, prevents memory leaks.
-//
-// SCALING: For horizontal scaling, verification sessions and queues would need
-// a shared store (e.g. Redis) so multiple bot instances can serve the same users.
 
+//  ค่า configuration
 const { config } = require('../config');
+//  ระบบตรวจจับ raid
 const { isAntiRaidActive } = require('../security/raidDetection');
+//  ระบบ lockdown
 const { isLockdownActive } = require('../security/autoLockdown');
+//  รีจิสทรีผู้ไม่ยืนยันตัวตน
 const { unregister: unregisterUnverified } = require('../security/unverifiedRegistry');
+//  บริการ logging
 const {
   logCaptchaStarted,
   logCaptchaFailed,
@@ -19,7 +17,9 @@ const {
   logError,
   logSuspiciousAccount,
 } = require('../utils/loggingService');
+//  การแจ้งเตือน Telegram
 const { sendSuspiciousAccountAlert, sendVerificationFailureAlert, sendUserKickedAlert } = require('../utils/telegram');
+//  ตัวจัดการ captcha
 const {
   generateImageCaptcha,
   buildVerifyPanelEmbed,
@@ -27,64 +27,81 @@ const {
   buildCaptchaModalForImage,
   validateCaptchaInput,
 } = require('./captchaHandler');
+//  การคืนค่า panel
 const { storePanelMessage, ensurePanelExists } = require('./panelRestore');
+//  การตรวจจับการใช้ captcha ผิดวิธี
 const { recordCaptchaFailure, clearFailureData, applyQuarantineRole } = require('./captchaAbuseDetection');
+//  การปิดระบบอย่างสมบูรณ์
 const { isShuttingDownInProgress } = require('../system/gracefulShutdown');
 
-// --- Constants ---
+//  ขีดจำกัดการยืนยันตัวตน
 const MAX_ATTEMPTS = 3;
-const CAPTCHA_LIFETIME_MS = 3 * 60 * 1000; // 3 minutes
+//  อายุ captcha 3 นาที
+const CAPTCHA_LIFETIME_MS = 3 * 60 * 1000;
+//  cooldown ปุ่ม 5 วินาที
 const BUTTON_COOLDOWN_MS = 5_000;
-const FAIL_COOLDOWN_MS = 9_000; // 8–10 seconds after wrong answer
+//  cooldown การล้มเหลว 9 วินาที
+const FAIL_COOLDOWN_MS = 9_000;
+// การบล็อกหลังเตะ 1 นาที
 const POST_KICK_BLOCK_MS = 60_000;
+//  ขีดจำกัดการทำงานพร้อมกัน
 const MAX_CONCURRENT_BUTTON_CLICKS = 25;
 const MAX_CONCURRENT_SUBMISSIONS = 20;
-const GLOBAL_RATE_LIMIT_SUBMISSIONS = 5; // max per user per minute
+//  จำกัดอัตราส่วนทั่วโลก
+const GLOBAL_RATE_LIMIT_SUBMISSIONS = 5;
 const GLOBAL_RATE_LIMIT_WINDOW_MS = 60_000;
+//  การตั้งค่าคิว
 const QUEUE_BATCH_SIZE = 5;
 const QUEUE_PROCESS_INTERVAL_MS = 100;
+//  ช่วงเวลา cleanup 1 นาที
 const CLEANUP_INTERVAL_MS = 60_000;
-const MAX_QUEUE_SIZE = 1000; // Prevent memory explosion
 
-// --- In-memory state ---
-/** userId -> { code, guildId, expiresAt } */
+//  เซสชันการยืนยันตัวตน
 const verificationSessions = new Map();
+//  บัญชีที่น่าสงสัย
 const suspiciousAccounts = new Set();
+//  การติดตามการคลิกปุ่ม
 const lastButtonClickAt = new Map();
+//  การบล็อกหลังเตะ
 const postKickBlockUntil = new Map();
+//  cooldown การล้มเหลว
 const failCooldownUntil = new Map();
+//  การพยายามของผู้ใช้
 const userAttempts = new Map();
-/** userId -> timestamps of recent submissions (for global rate limit) */
+//  timestamps การส่งข้อมูล
 const submissionTimestamps = new Map();
 
-// --- Rate limiting ---
+//  ตัวนับการทำงานพร้อมกัน
 let concurrentButtonClicks = 0;
 let concurrentSubmissions = 0;
 
-// --- Verification queue: process button clicks in batches to avoid overload ---
-// SCALING: Could be replaced with Redis-backed queue for multi-instance deployments.
+//  คิวการยืนยันตัวตน
 const verifyQueue = [];
 let queueProcessing = false;
 
+//  ดึงอายุบัญชีเป็นวัน
 function getAccountAgeDays(user) {
   const now = Date.now();
   const created = user.createdAt.getTime();
   return (now - created) / (1000 * 60 * 60 * 24);
 }
 
+//  ทำเครื่องหมายผู้ใช้ว่าน่าสงสัย
 function markSuspiciousUser(userId) {
   suspiciousAccounts.add(userId);
 }
 
+//  ตรวจสอบว่าผู้ใช้น่าสงสัยหรือไม่
 function isSuspiciousUser(userId) {
   return suspiciousAccounts.has(userId);
 }
 
-/** Global rate limiter: max 5 submissions per minute per user. */
+//  ตรวจสอบจำกัดอัตราส่วนทั่วโลก
 function checkGlobalRateLimit(userId) {
   const now = Date.now();
   let timestamps = submissionTimestamps.get(userId) || [];
   timestamps = timestamps.filter((ts) => now - ts < GLOBAL_RATE_LIMIT_WINDOW_MS);
+  //  ตรวจสอบว่าเกินจำกัดหรือไม่
   if (timestamps.length >= GLOBAL_RATE_LIMIT_SUBMISSIONS) {
     return false;
   }
@@ -93,7 +110,7 @@ function checkGlobalRateLimit(userId) {
   return true;
 }
 
-/** Record a submission for rate limiting (call when processing). */
+//  บันทึก timestamp การส่งข้อมูล
 function recordSubmission(userId) {
   const now = Date.now();
   let timestamps = submissionTimestamps.get(userId) || [];
@@ -102,18 +119,19 @@ function recordSubmission(userId) {
   submissionTimestamps.set(userId, timestamps);
 }
 
-/** Session cleanup: remove expired entries every 60 seconds to prevent memory leaks. */
+//  ดำเนินการ cleanup เซสชัน
 function runSessionCleanup() {
   const now = Date.now();
-  const maxAge = CAPTCHA_LIFETIME_MS + 60_000; // session + 1 min grace
+  const maxAge = CAPTCHA_LIFETIME_MS + 60_000;
 
+  //  cleanup เซสชันที่หมดอายุ
   for (const [userId, session] of verificationSessions.entries()) {
     if (now > session.expiresAt + 60_000) {
       verificationSessions.delete(userId);
     }
   }
 
-  // Clean old cooldown/block entries (older than 2 minutes)
+  //  cleanup การคลิกปุ่มเก่า
   const cutoff = now - 120_000;
   for (const [userId, ts] of lastButtonClickAt.entries()) {
     if (ts < cutoff) lastButtonClickAt.delete(userId);
@@ -124,6 +142,7 @@ function runSessionCleanup() {
   for (const [userId, ts] of failCooldownUntil.entries()) {
     if (ts < cutoff) failCooldownUntil.delete(userId);
   }
+  //  cleanup timestamps การส่งข้อมูลเก่า
   for (const [userId, timestamps] of submissionTimestamps.entries()) {
     const filtered = timestamps.filter((t) => now - t < GLOBAL_RATE_LIMIT_WINDOW_MS);
     if (filtered.length === 0) submissionTimestamps.delete(userId);
@@ -131,6 +150,7 @@ function runSessionCleanup() {
   }
 }
 
+//  เริ่มต้น loop cleanup เซสชัน
 function startSessionCleanupLoop() {
   setInterval(() => {
     try {
@@ -141,8 +161,9 @@ function startSessionCleanupLoop() {
   }, CLEANUP_INTERVAL_MS);
 }
 
-// --- Verify panel ---
+//  ส่ง panel การยืนยันตัวตน
 async function sendVerifyPanel(guild) {
+  //  ตรวจสอบ welcome channel
   if (!config.WELCOME_CHANNEL_ID) return;
   let channel;
   try {
@@ -151,14 +172,14 @@ async function sendVerifyPanel(guild) {
     logError('sendVerifyPanel', err);
     return;
   }
+  //  ตรวจสอบว่า channel เป็น text based หรือไม่
   if (!channel?.isTextBased()) return;
   
-  // Check if panel already exists using restore system
+  //  ตรวจสอบว่า panel มีอยู่แล้วหรือไม่
   if (await ensurePanelExists(guild)) {
-    return; // Panel already exists or was restored
+    return;
   }
-  
-  // Create new panel
+  //  สร้างและส่ง panel
   const { embed, components } = buildVerifyPanelEmbed();
   try {
     const message = await channel.send({ embeds: [embed], components });
@@ -168,22 +189,28 @@ async function sendVerifyPanel(guild) {
   }
 }
 
-/** Process one queued verification request. */
+//  ดำเนินการรายการในคิวการยืนยันตัวตน
 async function processQueueItem(item) {
   const { interaction } = item;
   const { guild, user } = interaction;
   const now = Date.now();
 
+  //  บันทึกการคลิกปุ่ม
   lastButtonClickAt.set(user.id, now);
 
   try {
+    //  ตรวจสอบว่า lockdown ทำงานอยู่หรือไม่
     const harder = isLockdownActive();
+    //  สร้าง captcha
     const { buffer, text } = await generateImageCaptcha(harder);
     const expiresAt = now + CAPTCHA_LIFETIME_MS;
+    //  เก็บเซสชันการยืนยันตัวตน
     verificationSessions.set(user.id, { code: text, guildId: guild.id, expiresAt });
 
+    //  บันทึกการเริ่ม captcha
     await logCaptchaStarted(guild, user.tag, user.id);
     const payload = buildCaptchaImageReply(buffer);
+    //  ส่ง captcha ไปยังผู้ใช้
     await interaction.reply({
       ...payload,
       ephemeral: true,
@@ -191,6 +218,7 @@ async function processQueueItem(item) {
   } catch (err) {
     logError('processQueueItem generateCaptcha', err);
     verificationSessions.delete(user.id);
+    //  ตอบกลับข้อผิดพลาดเป็นภาษาไทย
     await interaction.reply({
       content: 'เกิดข้อผิดพลาดในการสร้าง Captcha กรุณาลองใหม่อีกครั้ง.',
       ephemeral: true,
@@ -198,31 +226,34 @@ async function processQueueItem(item) {
   }
 }
 
-/** Worker: process verification queue in batches. */
+//  ดำเนินการคิวการยืนยันตัวตน
 async function processVerifyQueue() {
-  // Defensive coding: ensure variables are defined
+  //  ตรวจสอบว่ากำลังดำเนินการหรือว่างหรือไม่
   if (queueProcessing || verifyQueue.length === 0) return;
+  //  ตรวจสอบขีดจำกัดการทำงานพร้อมกัน
   if (concurrentButtonClicks >= MAX_CONCURRENT_BUTTON_CLICKS) return;
 
   queueProcessing = true;
   
   try {
+    //  ปรับขนาด batch สำหรับ lockdown
     const batchSize = isLockdownActive() ? 2 : QUEUE_BATCH_SIZE;
     const batch = verifyQueue.splice(0, batchSize);
-    
-    // Process items safely with error handling for each item
+    //  ดำเนินการแต่ละรายการ
     for (const item of batch) {
       if (!item || !item.interaction) {
         console.warn('Invalid queue item found, skipping');
         continue;
       }
       
+      //  เพิ่มตัวนับการทำงานพร้อมกัน
       concurrentButtonClicks += 1;
       try {
         await processQueueItem(item);
       } catch (err) {
         logError('processVerifyQueue item', err);
       } finally {
+        //  ลดตัวนับการทำงานพร้อมกัน
         concurrentButtonClicks = Math.max(0, concurrentButtonClicks - 1);
       }
     }
@@ -230,20 +261,17 @@ async function processVerifyQueue() {
     logError('processVerifyQueue batch processing', err);
   } finally {
     queueProcessing = false;
-    
-    // Continue processing if more items remain in queue
+    //  ดำเนินการต่อถ้าคิวไม่ว่าง
     if (verifyQueue.length > 0) {
       setImmediate(() => processVerifyQueue());
     }
   }
 }
 
-// --- Button click: add to queue (verification queue) ---
 async function startVerification(interaction) {
   const { user } = interaction;
   const now = Date.now();
 
-  // Check if bot is shutting down
   if (isShuttingDownInProgress()) {
     await interaction.reply({
       content: '🔄 Bot is currently restarting. Please try again in a moment.',
@@ -317,10 +345,9 @@ async function startVerification(interaction) {
     return;
   }
 
-  // Backpressure: cap queue size to avoid memory explosion during raids
-  if (verifyQueue.length >= MAX_QUEUE_SIZE) {
+  if (verifyQueue.length >= 500) {
     await interaction.reply({
-      content: 'มีผู้ใช้ยืนยันตัวตนจำนวนมาก กรุณาลองใหม่อีกครั้ง.',
+      content: 'มีผู้ใช้ยืนยันตัวตนจำนวนมาก กรุณาลองใหม่อีกครั้งในสักครู่.',
       ephemeral: true,
     });
     return;
@@ -330,12 +357,13 @@ async function startVerification(interaction) {
   setImmediate(() => processVerifyQueue());
 }
 
-/** Handle "Enter code" button: show modal. */
+//  จัดการปุ่มกรอกรหัส
 async function handleEnterCodeButton(interaction) {
   const { guild, user } = interaction;
   const session = verificationSessions.get(user.id);
   const now = Date.now();
 
+  //  ตรวจสอบว่ามีเซสชันอยู่หรือไม่
   if (!session) {
     await interaction.reply({
       content: 'ไม่พบเซสชันยืนยันตัวตนของคุณ กรุณากดปุ่มยืนยันตัวตนอีกครั้ง.',
@@ -344,25 +372,27 @@ async function handleEnterCodeButton(interaction) {
     return;
   }
 
+  //  ตรวจสอบว่าเซสชันหมดอายุหรือไม่
   if (now > session.expiresAt) {
     verificationSessions.delete(user.id);
     await interaction.reply({
       content: 'รหัสยืนยันหมดอายุแล้ว กรุณากดปุ่มยืนยันตัวตนเพื่อขอรหัสใหม่.',
       ephemeral: true,
     });
+    //  บันทึกว่า captcha หมดอายุ
     await logGenericEvent(
       guild,
       'Captcha expired',
-      `User ${user.tag} (${user.id}) captcha expired.`,
+      `User ${user.tag} (${user.id}) captcha expired`
     );
     return;
   }
 
+  //  แสดง modal สำหรับ captcha
   const modal = buildCaptchaModalForImage();
   await interaction.showModal(modal);
 }
 
-// --- Modal submit: validate captcha, enforce attempts and kick ---
 async function handleVerificationSubmit(interaction) {
   const { guild, user } = interaction;
   const session = verificationSessions.get(user.id);
@@ -387,6 +417,7 @@ async function handleVerificationSubmit(interaction) {
   concurrentSubmissions += 1;
 
   try {
+    //  ตรวจสอบว่ามีเซสชันอยู่หรือไม่
     if (!session) {
       await interaction.reply({
         content: 'ไม่พบเซสชันยืนยันตัวตนของคุณ กรุณากดปุ่มยืนยันตัวตนอีกครั้ง.',
@@ -395,12 +426,14 @@ async function handleVerificationSubmit(interaction) {
       return;
     }
 
+    //  ตรวจสอบว่าเซสชันหมดอายุหรือไม่
     if (now > session.expiresAt) {
       verificationSessions.delete(user.id);
       await interaction.reply({
         content: 'รหัสยืนยันหมดอายุแล้ว กรุณากดปุ่มยืนยันตัวตนเพื่อขอรหัสใหม่.',
         ephemeral: true,
       });
+      //  บันทึกว่า captcha หมดอายุ
       await logGenericEvent(
         guild,
         'Captcha expired',
@@ -409,9 +442,11 @@ async function handleVerificationSubmit(interaction) {
       return;
     }
 
+    //  ดึงและตรวจสอบข้อมูล captcha
     const rawInput = interaction.fields.getTextInputValue('captcha_code') ?? '';
     const result = validateCaptchaInput(rawInput, session.code);
 
+    //  ตรวจสอบข้อผิดพลาดการตรวจสอบ
     if (result.errorMessage) {
       await interaction.reply({
         content: result.errorMessage,
@@ -420,39 +455,43 @@ async function handleVerificationSubmit(interaction) {
       return;
     }
 
+    //  การยืนยันตัวตนสำเร็จ
     if (result.valid) {
+      //  ล้างข้อมูลเซสชัน
       verificationSessions.delete(user.id);
       userAttempts.delete(user.id);
       failCooldownUntil.delete(user.id);
+      suspiciousAccounts.delete(user.id);
       postKickBlockUntil.delete(user.id);
-      unregisterUnverified(user.id);
-
-      // Clear abuse detection data on successful verification
       clearFailureData(user.id);
       
       try {
+        //  ดึงข้อมูลสมาชิกและมอบหมายบทบาท
         const member = await guild.members.fetch(user.id);
+        //  มอบหมายบทบาทที่ยืนยันตัวตนแล้ว
         if (config.VERIFY_ROLE_ID) {
           const role =
             guild.roles.cache.get(config.VERIFY_ROLE_ID) ||
             (await guild.roles.fetch(config.VERIFY_ROLE_ID));
           if (role) await member.roles.add(role, 'Verification success');
         }
+        //  ลบหมายบทบาทกักกัน
         if (config.QUARANTINE_ROLE_ID) {
           const qRole =
             guild.roles.cache.get(config.QUARANTINE_ROLE_ID) ||
             (await guild.roles.fetch(config.QUARANTINE_ROLE_ID));
-          if (qRole && member.roles.cache.has(qRole.id)) {
-            await member.roles.remove(qRole, 'User verified; remove quarantine');
-          }
+          if (qRole) await member.roles.remove(qRole, 'User verified; remove quarantine');
         }
+        //  ข้อความสำเร็จ
         await interaction.reply({
           content: 'ยินดีต้อนรับสู่เซิร์ฟเวอร์ ยืนยันตัวตนสำเร็จ! 🎉',
           ephemeral: true,
         });
+        //  บันทึกความสำเร็จ
         await logCaptchaSuccess(guild, user.tag, user.id);
       } catch (err) {
         logError('handleVerificationSubmit success', err);
+        //  ข้อความข้อผิดพลาด
         await interaction.reply({
           content: 'เกิดข้อผิดพลาดขณะให้ role กรุณาลองใหม่หรือแจ้งแอดมิน.',
           ephemeral: true,
@@ -464,10 +503,8 @@ async function handleVerificationSubmit(interaction) {
     const currentAttempts = (userAttempts.get(user.id) ?? 0) + 1;
     userAttempts.set(user.id, currentAttempts);
 
-    // Record captcha failure for abuse detection
     const abuseResult = await recordCaptchaFailure(user.id, guild.id);
     
-    // Apply quarantine if abuse threshold reached
     if (abuseResult.shouldQuarantine) {
       await applyQuarantineRole(guild, user.id);
       await interaction.reply({
@@ -494,21 +531,25 @@ async function handleVerificationSubmit(interaction) {
       return;
     }
 
+    //  ล้างเซสชันและตั้งค่าการบล็อกหลังเตะ
     verificationSessions.delete(user.id);
     userAttempts.delete(user.id);
     postKickBlockUntil.set(user.id, now + POST_KICK_BLOCK_MS);
 
+    //  ข้อความเตะ
     await interaction.reply({
       content: 'คุณกรอกรหัสผิดครบ 3 ครั้ง ระบบจะเตะคุณออกจากเซิร์ฟเวอร์.',
       ephemeral: true,
     });
+    //  บันทึกความล้มเหลวและเตะ
     await logCaptchaFailed(guild, user.tag, user.id, MAX_ATTEMPTS, MAX_ATTEMPTS);
     await logUserKicked(
       guild,
       user.tag,
       user.id,
-      'Failed captcha 3 times (Attempt 3/3).',
+      'ล้มเหลวในการยืนยันตัวตนหลัง 3 ครั้ง'
     );
+    //  ส่งการเตะ
     await sendVerificationFailureAlert({
       username: user.tag,
       userId: user.id,
@@ -519,39 +560,40 @@ async function handleVerificationSubmit(interaction) {
     await sendUserKickedAlert({
       username: user.tag,
       userId: user.id,
-      reason: 'Failed captcha 3 times',
+      reason: 'ล้มเหลวในการยืนยันตัวตนหลัง 3 ครั้ง',
       guildName: guild.name
     });
 
     try {
+      //  เตะผู้ใช้สำหรับการยืนยันตัวตนล้มเหลว
       const member = await guild.members.fetch(user.id);
-      await member.kick('Verification failed: 3/3 attempts.');
+      await member.kick('ล้มเหลวในการยืนยันตัวตนหลัง 3 ครั้ง');
     } catch (err) {
       logError('handleVerificationSubmit kick', err);
     }
+  } catch (err) {
+    logError('handleVerificationSubmit', err);
+    await interaction.reply({
+      content: 'เกิดข้อผิดพลาดในการตรวจสอบรหัส กรุณาลองใหม่.',
+      ephemeral: true,
+    });
   } finally {
+    //  ลดการยื่นข้อมูลพร้อมกัน
     concurrentSubmissions = Math.max(0, concurrentSubmissions - 1);
   }
 }
 
-// Start cleanup loop on first load
-startSessionCleanupLoop();
-
-/** Force session cleanup (for memory guard). */
-function forceSessionCleanup() {
-  runSessionCleanup();
-}
-
-/** Get count of active verification sessions. */
+//  ดึงจำนวนเซสชันการยืนยันตัวตน
 function getVerificationSessionCount() {
   return verificationSessions.size;
 }
 
-/** Get count of suspicious accounts. */
+// ดึงจำนวนบัญชีที่น่าสงสัย
 function getSuspiciousAccountCount() {
   return suspiciousAccounts.size;
 }
 
+// exports  
 module.exports = {
   sendVerifyPanel,
   startVerification,

@@ -1,19 +1,14 @@
-// path: src/system/startupHealthCheck.js
-//
-// Bot startup health check: validates critical systems on startup.
-// If any system fails, logs error and enables SAFE MODE.
 
+//  นำเข้า modules ที่จำเป็น
 const { logError } = require('../utils/logger');
 const { activateSafeMode } = require('../security/autoLockdown');
 
-/**
- * Test captcha generator functionality
- * @returns {Promise<boolean>} True if captcha generator works
- */
+//  ทดสอบตัวสร้าง captcha
 async function testCaptchaGenerator() {
   try {
     const { generateImageCaptcha } = require('../verification/captchaHandler');
     const result = await generateImageCaptcha();
+    //  ตรวจสอบว่าสร้าง captcha ได้ถูกต้อง
     return result && result.buffer && result.text && result.text.length > 0;
   } catch (err) {
     logError('startupHealthCheck captcha generator test', err);
@@ -21,20 +16,17 @@ async function testCaptchaGenerator() {
   }
 }
 
-/**
- * Test verification queue system
- * @returns {Promise<boolean>} True if verification queue works
- */
+//  ทดสอบระบบคิว verification
 async function testVerificationQueue() {
   try {
     const { getQueueLength, clearQueue } = require('../security/joinQueue');
     const initialLength = getQueueLength();
 
-    // Queue should be accessible
+    //  ตรวจสอบว่าฟังก์ชันทำงานได้
     if (typeof getQueueLength !== 'function') return false;
 
-    // Test queue operations
     const length = getQueueLength();
+    //  ตรวจสอบว่าคืนค่าเป็นตัวเลข
     return typeof length === 'number';
   } catch (err) {
     logError('startupHealthCheck verification queue test', err);
@@ -42,22 +34,18 @@ async function testVerificationQueue() {
   }
 }
 
-/**
- * Test logging system
- * @returns {Promise<boolean>} True if logging system works
- */
+//  ทดสอบระบบ logging
 async function testLoggingSystem() {
   try {
     const { logGenericEvent } = require('../utils/loggingService');
 
-    // Test logging with a mock guild object
+    //  สร้าง mock guild สำหรับทดสอบ
     const mockGuild = {
       id: 'test-guild',
       name: 'Test Guild',
       client: { user: { tag: 'test-bot' } }
     };
 
-    // Try to log a test event (this may fail if no log channel is configured)
     await logGenericEvent(mockGuild, 'Health Check Test', 'Startup health check in progress');
     return true;
   } catch (err) {
@@ -66,25 +54,23 @@ async function testLoggingSystem() {
   }
 }
 
-/**
- * Test guild configuration system
- * @returns {Promise<boolean>} True if guild config works
- */
+//  ทดสอบระบบ guild config
 async function testGuildConfig() {
   try {
     const { getGuildConfig, setGuildConfig, deleteGuildConfig } = require('../utils/guildConfig');
 
-    // Test configuration operations
+    //  ทดสอบการอ่าน config
     const testConfig = await getGuildConfig('test-guild');
     if (!testConfig || typeof testConfig !== 'object') return false;
 
-    // Test setting configuration
+    //  ทดสอบการเขียน config
     await setGuildConfig('test-guild', { test_field: 'test_value' });
     const updatedConfig = await getGuildConfig('test-guild');
 
+    //  ตรวจสอบว่าเขียนได้ถูกต้อง
     const success = updatedConfig && updatedConfig.test_field === 'test_value';
     
-    // Clean up test data
+    //  ลบข้อมูลทดสอบ
     await deleteGuildConfig('test-guild');
     
     return success;
@@ -94,19 +80,16 @@ async function testGuildConfig() {
   }
 }
 
-/**
- * Test Discord API connectivity
- * @param {Client} client - Discord client
- * @returns {Promise<boolean>} True if Discord API is accessible
- */
+//  ทดสอบการเชื่อมต่อ Discord
 async function testDiscordConnectivity(client) {
   try {
+    //  ตรวจสอบว่า client พร้อมใช้งาน
     if (!client || !client.isReady()) return false;
 
-    // Test basic API connectivity
+    //  ทดสอบการดึงข้อมูลผู้ใช้
     await client.user.fetch();
     
-    // Test guild access - get first available guild
+    //  ตรวจสอบว่ามี guild
     const guild = client.guilds.cache.first();
     if (!guild) return false;
 
@@ -117,14 +100,11 @@ async function testDiscordConnectivity(client) {
   }
 }
 
-/**
- * Perform comprehensive startup health check
- * @param {Client} client - Discord client
- * @returns {Promise<Object>} Health check results
- */
+//  ดำเนินการตรวจสอบสุขภาพระบบตอนเริ่มต้น
 async function performStartupHealthCheck(client) {
   console.log('🏥 Starting startup health check...');
 
+  //  เก็บผลการทดสอบ
   const results = {
     captchaGenerator: false,
     verificationQueue: false,
@@ -134,6 +114,7 @@ async function performStartupHealthCheck(client) {
     overall: false
   };
 
+  //  รายการการทดสอบ
   const tests = [
     { name: 'captchaGenerator', test: () => testCaptchaGenerator() },
     { name: 'verificationQueue', test: () => testVerificationQueue() },
@@ -144,6 +125,7 @@ async function performStartupHealthCheck(client) {
 
   let passedTests = 0;
 
+  //  ทำการทดสอบแต่ละรายการ
   for (const { name, test } of tests) {
     try {
       console.log(`  Testing ${name}...`);
@@ -160,6 +142,7 @@ async function performStartupHealthCheck(client) {
     }
   }
 
+  //  ตรวจสอบว่าผ่านทั้งหมดหรือไม่
   results.overall = passedTests === tests.length;
 
   if (results.overall) {
@@ -167,10 +150,11 @@ async function performStartupHealthCheck(client) {
   } else {
     console.log(`⚠️ Startup health check: ${passedTests}/${tests.length} tests passed`);
 
-    // Enable safe mode if critical systems failed
+    //  ตรวจสอบระบบที่สำคัญที่ล้มเหลว
     const criticalFailures = ['captchaGenerator', 'verificationQueue', 'discordConnectivity']
       .filter(system => !results[system]);
 
+    //  ถ้ามีระบบสำคัญล้มเหลว ให้เปิด safe mode
     if (criticalFailures.length > 0) {
       console.log(`🚨 Critical systems failed: ${criticalFailures.join(', ')}. Enabling SAFE MODE`);
       try {
@@ -185,17 +169,15 @@ async function performStartupHealthCheck(client) {
   return results;
 }
 
-/**
- * Initialize startup health check
- * @param {Client} client - Discord client
- */
+//  เริ่มต้นการตรวจสอบสุขภาพระบบ
 async function initializeStartupHealthCheck(client) {
-  // Wait a moment for client to be fully ready
+  //  รอ 2 วินาทีก่อนทำการทดสอบ
   await new Promise(resolve => setTimeout(resolve, 2000));
 
   return await performStartupHealthCheck(client);
 }
 
+//  exports
 module.exports = {
   performStartupHealthCheck,
   initializeStartupHealthCheck,
